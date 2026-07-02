@@ -1,8 +1,25 @@
 import type { Metadata } from 'next';
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://cfe-simulator.vercel.app';
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: 'Simulador Factura CFE',
   description: 'Simulador de tarifas domésticas CFE — Tarifas 1, 1A–1F y DAC',
+  openGraph: {
+    type: 'website',
+    url: siteUrl,
+    title: 'Simulador Factura CFE',
+    description: 'Simulador de tarifas domésticas CFE — Tarifas 1, 1A–1F y DAC',
+    siteName: 'Simulador Factura CFE',
+    images: [{ url: '/cfe.png', width: 1200, height: 630 }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Simulador Factura CFE',
+    description: 'Simulador de tarifas domésticas CFE — Tarifas 1, 1A–1F y DAC',
+    images: ['/cfe.png'],
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
