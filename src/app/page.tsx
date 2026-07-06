@@ -352,7 +352,7 @@ export default function SimuladorPage() {
             </Row>
             <Field label="Región IVA">
               <Select value={form.ivaBajoFrontera ? 'frontera' : 'normal'} onChange={e => updateForm('ivaBajoFrontera', e.target.value === 'frontera')}>
-                <option value="normal">Interior (15%)</option>
+                <option value="normal">Interior (16%)</option>
                 <option value="frontera">Frontera/BC/BCS/QROO (10%)</option>
               </Select>
             </Field>

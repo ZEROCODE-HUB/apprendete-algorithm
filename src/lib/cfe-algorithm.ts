@@ -494,7 +494,7 @@ export function calcularFactura(input: SimuladorInput): ResultadoCalculo {
   const dapAplicado = tipoPeriodo === 'BIMESTRAL' ? dap * 2 : dap;
 
   // IVA sobre Facturación Neta Bonificada
-  const tasaIva = ivaBajoFrontera ? 0.10 : 0.15;
+  const tasaIva = ivaBajoFrontera ? 0.10 : 0.16;
   const iva = truncar4(facturacionNeta * tasaIva);
 
   // Subsidio estatal (se resta después de IVA, antes de sumar DAP)

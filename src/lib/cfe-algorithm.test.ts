@@ -496,14 +496,14 @@ describe('Periodos mixtos — casos límite (no mixto por días)', () => {
 // ═════════════════════════════════════════════════════════════════════════════
 
 describe('Cadena de facturación — DAP e IVA', () => {
-  it('IVA interior es 15% sobre Facturación Neta', () => {
+  it('IVA interior es 16% sobre Facturación Neta', () => {
     const r = calcularFactura(base({
       consumoActual: 100,
       dap: 0,
       ivaBajoFrontera: false,
     }));
-    expect(r.tasaIva).toBe(0.15);
-    expect(r.iva).toBeCloseTo(r.facturacionNeta * 0.15, 2);
+    expect(r.tasaIva).toBe(0.16);
+    expect(r.iva).toBeCloseTo(r.facturacionNeta * 0.16, 2);
   });
 
   it('IVA frontera es 10% sobre Facturación Neta', () => {
@@ -569,14 +569,14 @@ describe('Integración — casos completos', () => {
     // E2: 125 * 0.963 = 120.3750  → total parcial = 179.8500
     // No llega al E3 porque E1+E2 = 75+125 = 200 exacto
     // FB = 179.85
-    // IVA = 179.85 * 0.15 = 26.9775 → truncar4 = 26.9775
-    // Total = 179.85 + 26.9775 = 206.8275
+    // IVA = 179.85 * 0.16 = 28.7760 → truncar4 = 28.7760
+    // Total = 179.85 + 28.7760 = 208.6260
 
     expect(r.esVerano).toBe(false);
     expect(r.esMixto).toBe(false);
     expect(r.esDAC).toBe(false);
     expect(r.facturacionBasica).toBeCloseTo(179.85, 2);
-    expect(r.totalPagar).toBeCloseTo(206.83, 1);
+    expect(r.totalPagar).toBeCloseTo(208.63, 1);
   });
 
   it('caso verano: 200 kWh, mensual, verano, T1, sin DAP, IVA 15%', () => {
@@ -590,11 +590,11 @@ describe('Integración — casos completos', () => {
     // E1: 100 * 0.793 = 79.3000
     // E2: 50  * 0.963 = 48.1500
     // E3: 50  * 2.452 = 122.6000  → total = 250.0500
-    // IVA = 250.0500 * 0.15 = 37.5075
-    // Total ≈ 287.56
+    // IVA = 250.0500 * 0.16 = 40.0080
+    // Total ≈ 290.06
     expect(r.esVerano).toBe(true);
     expect(r.facturacionBasica).toBeCloseTo(250.05, 2);
-    expect(r.totalPagar).toBeCloseTo(287.56, 1);
+    expect(r.totalPagar).toBeCloseTo(290.06, 1);
   });
 
   it('caso bimestral completo: 400 kWh, bimestral, fuera de verano, T1, DAP=90, IVA 15%', () => {
@@ -610,12 +610,12 @@ describe('Integración — casos completos', () => {
     // E1: 150 * 0.793 = 118.9500
     // E2: 250 * 0.963 = 240.7500
     // total FB = 359.7000
-    // IVA = 359.7 * 0.15 = 53.9550
+    // IVA = 359.7 * 0.16 = 57.5520
     // DAP bimestral = 90
-    // Total = 359.70 + 90 + 53.955 = 503.655
+    // Total = 359.70 + 90 + 57.552 = 507.252
     expect(r.facturacionBasica).toBeCloseTo(359.70, 2);
     expect(r.dapAplicado).toBe(90);
-    expect(r.totalPagar).toBeCloseTo(503.66, 1);
+    expect(r.totalPagar).toBeCloseTo(507.25, 1);
   });
 
   it('caso DAC: usuario con alto consumo histórico', () => {
@@ -628,11 +628,11 @@ describe('Integración — casos completos', () => {
       ivaBajoFrontera: false,
     }));
     // DAC: 400 * 4.228 = 1691.2 → truncar4 = 1691.2000
-    // IVA = 1691.2 * 0.15 = 253.68
-    // Total ≈ 1944.88
+    // IVA = 1691.2 * 0.16 = 270.5920
+    // Total ≈ 1961.79
     expect(r.esDAC).toBe(true);
     expect(r.facturacionBasica).toBeCloseTo(1691.20, 2);
-    expect(r.totalPagar).toBeCloseTo(1944.88, 1);
+    expect(r.totalPagar).toBeCloseTo(1961.79, 1);
   });
 });
 
