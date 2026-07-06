@@ -363,6 +363,8 @@ export function calcularFactura(input: SimuladorInput): ResultadoCalculo {
   // ── 8. Cálculo principal ──────────────────────────────────────────────────
   let facturacionBasica = 0;
   let escalonesAplicadosResult: DesgloseEscalones[] = [];
+  let escalonesNoVeranoResult: DesgloseEscalones[] = [];
+  let escalonesVeranoResult: DesgloseEscalones[] = [];
   let desglosesMixto: DesgloseMixto | null = null;
 
   if (esDAC) {
@@ -372,10 +374,11 @@ export function calcularFactura(input: SimuladorInput): ResultadoCalculo {
     // (el más caro) sobre todo el consumo, que es la interpretación estándar.
     const precioDAC = escalonesAjustados[escalonesAjustados.length - 1]?.precio ?? 0;
     const subtotal = truncar4(consumoActual * precioDAC);
+    const dacEscalon = { escalon: 1, kwh: consumoActual, precio: precioDAC, subtotal };
     facturacionBasica = subtotal;
-    escalonesAplicadosResult = [
-      { escalon: 1, kwh: consumoActual, precio: precioDAC, subtotal },
-    ];
+    escalonesAplicadosResult = [dacEscalon];
+    escalonesNoVeranoResult = esVerano ? [] : [dacEscalon];
+    escalonesVeranoResult = esVerano ? [dacEscalon] : [];
   } else if (infoMixto.esMixto) {
     // ── Período mixto bimestral ───────────────────────────────────────────
     const { diasVerano, diasNoVerano } = infoMixto;
@@ -445,6 +448,8 @@ export function calcularFactura(input: SimuladorInput): ResultadoCalculo {
       cuotas.escalonesNoVerano
     );
 
+    escalonesNoVeranoResult = desgloseNoVerano;
+    escalonesVeranoResult = desgloseVerano;
     escalonesAplicadosResult = [
       ...desgloseNoVerano.map(e => ({ ...e, escalon: e.escalon })),
       ...desgloseVerano.map(e => ({ ...e, escalon: e.escalon + desgloseNoVerano.length })),
@@ -472,6 +477,8 @@ export function calcularFactura(input: SimuladorInput): ResultadoCalculo {
     const { costo, desglose } = calcularCostoEscalones(consumoActual, escalonesAjustados);
     facturacionBasica = costo;
     escalonesAplicadosResult = desglose;
+    escalonesNoVeranoResult = esVerano ? [] : desglose;
+    escalonesVeranoResult = esVerano ? desglose : [];
   }
 
   // ── 9. Mínimo mensual ─────────────────────────────────────────────────────
@@ -515,6 +522,8 @@ export function calcularFactura(input: SimuladorInput): ResultadoCalculo {
     cpd,
     consumoPronostico,
     escalonesAplicados: escalonesAplicadosResult,
+    escalonesNoVerano: escalonesNoVeranoResult,
+    escalonesVerano: escalonesVeranoResult,
     mixto: desglosesMixto,
     facturacionBasica,
     facturacionNormal,

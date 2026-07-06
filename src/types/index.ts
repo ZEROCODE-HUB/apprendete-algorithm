@@ -92,8 +92,10 @@ export interface ResultadoCalculo {
   cpd: number;                    // consumo promedio diario
   consumoPronostico: number;
 
-  // Desglose escalones (para periodo normal o cada sub-periodo en mixto)
-  escalonesAplicados: DesgloseEscalones[];
+  // Desglose escalones
+  escalonesAplicados: DesgloseEscalones[];     // combinados (para vista simple)
+  escalonesNoVerano: DesgloseEscalones[];      // solo no-verano (para vista detallada)
+  escalonesVerano: DesgloseEscalones[];        // solo verano (para vista detallada)
   mixto: DesgloseMixto | null;
 
   // Facturación

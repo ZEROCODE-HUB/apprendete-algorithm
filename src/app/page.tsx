@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import type { SimuladorInput, ResultadoCalculo, TarifaId, CuotasTarifa, PeriodoAnterior } from '../types';
+import type { SimuladorInput, ResultadoCalculo, TarifaId, CuotasTarifa, PeriodoAnterior, DesgloseEscalones } from '../types';
 import { CUOTAS_DEFAULT } from '../lib/cuotas-default';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -635,27 +635,16 @@ function Resultados({ r }: { r: ResultadoCalculo }) {
       <Card title="Escalones aplicados">
         {r.escalonesAplicados.length === 0 ? (
           <p style={{ color: '#6b7280', fontSize: 13 }}>Sin escalones aplicados.</p>
+        ) : r.esMixto ? (
+          <>
+            <SectionLabel color="#00c896">Fuera de verano</SectionLabel>
+            <EscalonesTable escalones={r.escalonesNoVerano} />
+            <div style={{ height: 16 }} />
+            <SectionLabel color="#f59e0b">Verano</SectionLabel>
+            <EscalonesTable escalones={r.escalonesVerano} />
+          </>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid #2a2d3e' }}>
-                <th style={thStyle}>Escalón</th>
-                <th style={thStyle}>kWh consumidos</th>
-                <th style={thStyle}>$/kWh</th>
-                <th style={thStyle}>Subtotal</th>
-              </tr>
-            </thead>
-            <tbody>
-              {r.escalonesAplicados.map((e, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid #1f2937' }}>
-                  <td style={tdStyle}>{e.escalon}</td>
-                  <td style={tdStyle}>{fmtKWh(e.kwh)}</td>
-                  <td style={tdStyle}>${fmt(e.precio)}</td>
-                  <td style={{ ...tdStyle, color: '#00c896' }}>{fmtMXN(e.subtotal)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <EscalonesTable escalones={r.escalonesAplicados} />
         )}
       </Card>
 
@@ -822,6 +811,31 @@ function LineaFactura({ label, valor, muted, accent }: { label: string; valor: n
       <span style={{ fontSize: 13, color: '#9ca3af' }}>{label}</span>
       <span style={{ fontSize: 13, fontWeight: 600, color: accent ?? '#e8eaf0' }}>{fmtMXN(valor)}</span>
     </div>
+  );
+}
+
+function EscalonesTable({ escalones }: { escalones: DesgloseEscalones[] }) {
+  return (
+    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+      <thead>
+        <tr style={{ borderBottom: '1px solid #2a2d3e' }}>
+          <th style={thStyle}>Escalón</th>
+          <th style={thStyle}>kWh consumidos</th>
+          <th style={thStyle}>$/kWh</th>
+          <th style={thStyle}>Subtotal</th>
+        </tr>
+      </thead>
+      <tbody>
+        {escalones.map((e, i) => (
+          <tr key={i} style={{ borderBottom: '1px solid #1f2937' }}>
+            <td style={tdStyle}>{e.escalon}</td>
+            <td style={tdStyle}>{fmtKWh(e.kwh)}</td>
+            <td style={tdStyle}>${fmt(e.precio)}</td>
+            <td style={{ ...tdStyle, color: '#00c896' }}>{fmtMXN(e.subtotal)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
