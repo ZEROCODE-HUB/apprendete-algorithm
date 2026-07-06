@@ -94,6 +94,7 @@ const base = (overrides: Partial<SimuladorInput>): SimuladorInput => ({
   idEntradaVerano: 4,          // verano inicia 1° mayo
   tipoPeriodo: 'MENSUAL',
   dap: 0,
+  subsidio: 0,
   ivaBajoFrontera: false,      // IVA 15%
   fechaInicioPeriodo: '2024-03-01',
   fechaFinPeriodo:   '2024-03-31',
@@ -672,6 +673,7 @@ describe('Facturas reales', () => {
       idEntradaVerano: 4,
       tipoPeriodo: 'BIMESTRAL',
       dap: 82,
+      subsidio: 0,
       ivaBajoFrontera: false,
       fechaInicioPeriodo: '2026-03-23',
       fechaFinPeriodo:   '2026-05-22',

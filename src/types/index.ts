@@ -49,6 +49,10 @@ export interface SimuladorInput {
 
   // Cuotas manuales (el usuario las ingresa para simular sin BD)
   cuotas: CuotasTarifa;
+
+  // Subsidio estatal (opcional) — se resta después de IVA
+  // Ej: ApoyoEdoSon (Sonora), Apoyo Jal (Jalisco), etc.
+  subsidio: number;                  // $ por periodo
 }
 
 // ─── Resultado del cálculo ───────────────────────────────────────────────────
@@ -99,6 +103,7 @@ export interface ResultadoCalculo {
   dapAplicado: number;
   iva: number;
   tasaIva: number;
+  subsidioAplicado: number;          // $ del subsidio aplicado (0 si no hay)
   totalPagar: number;
 
   // Metadatos

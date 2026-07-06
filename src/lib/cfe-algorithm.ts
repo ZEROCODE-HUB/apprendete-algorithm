@@ -266,6 +266,7 @@ export function calcularFactura(input: SimuladorInput): ResultadoCalculo {
     consumoActual,
     periodosAnteriores,
     cuotas,
+    subsidio,
   } = input;
 
   // ── 1. Días y CPD (defensivo contra fechas iguales o invertidas) ─────────
@@ -496,7 +497,11 @@ export function calcularFactura(input: SimuladorInput): ResultadoCalculo {
   const tasaIva = ivaBajoFrontera ? 0.10 : 0.15;
   const iva = truncar4(facturacionNeta * tasaIva);
 
-  const totalPagar = truncar4(facturacionNeta + dapAplicado + iva);
+  // Subsidio estatal (se resta después de IVA, antes de sumar DAP)
+  const subsidioAplicado = Math.max(0, subsidio);
+
+  // Total: FNE + IVA - Subsidio + DAP
+  const totalPagar = truncar4(facturacionNeta + iva - subsidioAplicado + dapAplicado);
 
   return {
     esVerano,
@@ -517,6 +522,7 @@ export function calcularFactura(input: SimuladorInput): ResultadoCalculo {
     dapAplicado,
     iva,
     tasaIva,
+    subsidioAplicado,
     totalPagar,
     fechaEntradaVerano: infoMixto.fechaEntradaISO,
     fechaSalidaVerano: infoMixto.fechaSalidaISO,

@@ -71,6 +71,7 @@ interface FormState {
   idEntradaVerano: IdEntradaVerano;
   tipoPeriodo: 'MENSUAL' | 'BIMESTRAL';
   dap: number;
+  subsidio: number;
   ivaBajoFrontera: boolean;
   fechaInicioPeriodo: string;
   fechaFinPeriodo: string;
@@ -83,6 +84,7 @@ const ESTADO_INICIAL: FormState = {
   idEntradaVerano: 4,
   tipoPeriodo: 'BIMESTRAL',
   dap: 45,
+  subsidio: 0,
   ivaBajoFrontera: false,
   fechaInicioPeriodo: FECHA_HACE_60,
   fechaFinPeriodo: FECHA_HOY,
@@ -266,6 +268,7 @@ export default function SimuladorPage() {
         idEntradaVerano: form.idEntradaVerano,
         tipoPeriodo: form.tipoPeriodo,
         dap: form.dap,
+        subsidio: form.subsidio,
         ivaBajoFrontera: form.ivaBajoFrontera,
         fechaInicioPeriodo: form.fechaInicioPeriodo,
         fechaFinPeriodo: form.fechaFinPeriodo,
@@ -340,6 +343,12 @@ export default function SimuladorPage() {
               <Field label="DAP mensual ($)">
                 <NumberInput value={form.dap} min={0} onChange={v => updateForm('dap', v)} />
               </Field>
+            </Row>
+            <Row>
+              <Field label="Subsidio estatal ($ por periodo)">
+                <NumberInput value={form.subsidio} min={0} onChange={v => updateForm('subsidio', v)} />
+              </Field>
+              <div style={{ flex: 1 }} />
             </Row>
             <Field label="Región IVA">
               <Select value={form.ivaBajoFrontera ? 'frontera' : 'normal'} onChange={e => updateForm('ivaBajoFrontera', e.target.value === 'frontera')}>
@@ -658,6 +667,7 @@ function Resultados({ r }: { r: ResultadoCalculo }) {
           <div style={{ borderTop: '1px solid #2a2d3e', margin: '8px 0' }} />
           <LineaFactura label="DAP (sin IVA)" valor={r.dapAplicado} accent="#6b7280" />
           <LineaFactura label={`IVA (${(r.tasaIva * 100).toFixed(0)}%)`} valor={r.iva} accent="#f59e0b" />
+          {r.subsidioAplicado > 0 && <LineaFactura label="Subsidio estatal" valor={-r.subsidioAplicado} accent="#22d3ee" />}
           <div style={{ borderTop: '2px solid #2a2d3e', margin: '8px 0' }} />
         </div>
 
