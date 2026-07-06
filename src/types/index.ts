@@ -21,6 +21,13 @@ export interface CuotasTarifa {
   minimoMensual: number;          // facturación mínima mensual ($)
 }
 
+// ─── Periodo anterior (para cálculo de promedio móvil y mixtos) ─────────────
+export interface PeriodoAnterior {
+  fechaInicio: string;  // ISO date "YYYY-MM-DD"
+  fechaFin: string;     // ISO date "YYYY-MM-DD"
+  consumo: number;      // kWh consumidos en el periodo
+}
+
 // ─── Inputs del simulador ────────────────────────────────────────────────────
 export interface SimuladorInput {
   // Configuración del municipio
@@ -35,15 +42,13 @@ export interface SimuladorInput {
   fechaFinPeriodo: string;        // ISO date "YYYY-MM-DD" (fecha de toma de lectura)
   consumoActual: number;          // kWh consumidos en el periodo actual
 
-  // Periodo anterior (para cálculo de mixtos)
-  fechaInicioPeriodoAnterior: string | null;
-  consumoAnterior: number | null; // kWh del periodo anterior
+  // Periodos anteriores (del más antiguo al más reciente)
+  // Si tipoPeriodo es BIMESTRAL, cada periodo debe ser bimestral
+  // Si tipoPeriodo es MENSUAL, cada periodo debe ser mensual
+  periodosAnteriores: PeriodoAnterior[];
 
   // Cuotas manuales (el usuario las ingresa para simular sin BD)
   cuotas: CuotasTarifa;
-
-  // Histórico para DAC (últimos 12 meses en kWh por mes)
-  historicoMensual: number[];     // array de hasta 12 valores
 }
 
 // ─── Resultado del cálculo ───────────────────────────────────────────────────

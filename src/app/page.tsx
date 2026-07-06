@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import type { SimuladorInput, ResultadoCalculo, TarifaId, CuotasTarifa } from '../types';
+import { useState, useMemo, useCallback } from 'react';
+import type { SimuladorInput, ResultadoCalculo, TarifaId, CuotasTarifa, PeriodoAnterior } from '../types';
 import { CUOTAS_DEFAULT } from '../lib/cuotas-default';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -60,6 +60,12 @@ const FECHA_HACE_120 = '2024-01-31';
 // TIPO DEL ESTADO DEL FORMULARIO
 // ═══════════════════════════════════════════════════════════════════════════
 
+interface PeriodoAnteriorInput {
+  fechaInicio: string;
+  fechaFin: string;
+  consumo: number;
+}
+
 interface FormState {
   tarifa: TarifaId;
   idEntradaVerano: IdEntradaVerano;
@@ -69,8 +75,7 @@ interface FormState {
   fechaInicioPeriodo: string;
   fechaFinPeriodo: string;
   consumoActual: number;
-  fechaInicioPeriodoAnterior: string | null;
-  consumoAnterior: number | null;
+  periodosAnteriores: PeriodoAnteriorInput[];
 }
 
 const ESTADO_INICIAL: FormState = {
@@ -82,8 +87,7 @@ const ESTADO_INICIAL: FormState = {
   fechaInicioPeriodo: FECHA_HACE_60,
   fechaFinPeriodo: FECHA_HOY,
   consumoActual: 280,
-  fechaInicioPeriodoAnterior: FECHA_HACE_120,
-  consumoAnterior: 260,
+  periodosAnteriores: [],
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -95,10 +99,10 @@ interface ValidationResult {
   errors: string[];
 }
 
-function validar(form: FormState, cuotas: CuotasTarifa, historico: number[]): ValidationResult {
+function validar(form: FormState, cuotas: CuotasTarifa): ValidationResult {
   const errors: string[] = [];
 
-  // Fechas
+  // Fechas del periodo actual
   if (!form.fechaInicioPeriodo || !form.fechaFinPeriodo) {
     errors.push('Debes capturar las fechas de inicio y fin del periodo actual.');
   } else {
@@ -122,21 +126,35 @@ function validar(form: FormState, cuotas: CuotasTarifa, historico: number[]): Va
     }
   }
 
-  // Periodo anterior (opcional, pero si se llena debe ser válido)
-  if (form.fechaInicioPeriodoAnterior && form.consumoAnterior !== null) {
-    const anterior = new Date(form.fechaInicioPeriodoAnterior);
-    const inicio = new Date(form.fechaInicioPeriodo);
-    if (isNaN(anterior.getTime())) {
-      errors.push('La fecha de inicio del periodo anterior no es válida.');
-    } else if (anterior >= inicio) {
-      errors.push('La fecha de inicio del periodo anterior debe ser anterior al inicio del periodo actual.');
+  // Periodos anteriores
+  const etiqueta = form.tipoPeriodo === 'BIMESTRAL' ? 'bimestral' : 'mensual';
+  form.periodosAnteriores.forEach((p, i) => {
+    const idx = i + 1;
+    if (!p.fechaInicio || !p.fechaFin) {
+      errors.push(`Periodo anterior #${idx}: faltan fechas.`);
+      return;
     }
-    if (form.consumoAnterior < 0) {
-      errors.push('El consumo anterior no puede ser negativo.');
+    const pInicio = new Date(p.fechaInicio);
+    const pFin = new Date(p.fechaFin);
+    if (isNaN(pInicio.getTime()) || isNaN(pFin.getTime())) {
+      errors.push(`Periodo anterior #${idx}: fechas no válidas.`);
+    } else if (pInicio >= pFin) {
+      errors.push(`Periodo anterior #${idx}: la fecha de inicio debe ser anterior a la de fin.`);
+    }
+    if (p.consumo < 0 || !isFinite(p.consumo)) {
+      errors.push(`Periodo anterior #${idx}: consumo inválido (${p.consumo}).`);
+    }
+  });
+
+  // Coherencia: el último periodo anterior debe terminar antes del inicio del actual
+  if (form.periodosAnteriores.length > 0 && form.fechaInicioPeriodo) {
+    const ultimo = form.periodosAnteriores[form.periodosAnteriores.length - 1];
+    if (ultimo.fechaFin && new Date(ultimo.fechaFin).getTime() >= new Date(form.fechaInicioPeriodo).getTime()) {
+      errors.push(`El último periodo anterior termina después del inicio del periodo actual. Deben ser contiguos.`);
     }
   }
 
-  // Consumo
+  // Consumo actual
   if (form.consumoActual < 0) {
     errors.push('El consumo actual no puede ser negativo.');
   }
@@ -177,14 +195,6 @@ function validar(form: FormState, cuotas: CuotasTarifa, historico: number[]): Va
     errors.push('El mínimo mensual no puede ser negativo.');
   }
 
-  // Histórico
-  if (historico.some(v => v < 0 || !isFinite(v))) {
-    errors.push('El histórico contiene valores inválidos.');
-  }
-  if (historico.length > 12) {
-    errors.push('El histórico no puede tener más de 12 meses.');
-  }
-
   return { ok: errors.length === 0, errors };
 }
 
@@ -198,18 +208,32 @@ export default function SimuladorPage() {
   const [resultado, setResultado] = useState<ResultadoCalculo | null>(null);
   const [cargando, setCargando] = useState(false);
   const [errores, setErrores] = useState<string[]>([]);
-  const [historicoStr, setHistoricoStr] = useState('200, 220, 240, 260, 280, 300, 280, 260, 240, 220, 210');
 
-  // Parseo de histórico
-  const historico = useMemo(() => {
-    return historicoStr
-      .split(',')
-      .map(s => parseFloat(s.trim()))
-      .filter(n => !isNaN(n) && isFinite(n));
-  }, [historicoStr]);
+  // Helper para modificar un periodo anterior específico
+  const updatePeriodo = useCallback((index: number, campo: keyof PeriodoAnteriorInput, valor: string | number) => {
+    setForm(f => {
+      const next = [...f.periodosAnteriores];
+      next[index] = { ...next[index], [campo]: valor };
+      return { ...f, periodosAnteriores: next };
+    });
+  }, []);
+
+  const addPeriodo = useCallback(() => {
+    setForm(f => ({
+      ...f,
+      periodosAnteriores: [...f.periodosAnteriores, { fechaInicio: '', fechaFin: '', consumo: 0 }],
+    }));
+  }, []);
+
+  const removePeriodo = useCallback((index: number) => {
+    setForm(f => ({
+      ...f,
+      periodosAnteriores: f.periodosAnteriores.filter((_, i) => i !== index),
+    }));
+  }, []);
 
   // Validación reactiva
-  const validation = useMemo(() => validar(form, cuotas, historico), [form, cuotas, historico]);
+  const validation = useMemo(() => validar(form, cuotas), [form, cuotas]);
 
   // Cambio de tarifa
   const handleTarifaChange = (t: TarifaId) => {
@@ -229,7 +253,7 @@ export default function SimuladorPage() {
     setResultado(null);
 
     // Re-validar al momento de calcular
-    const v = validar(form, cuotas, historico);
+    const v = validar(form, cuotas);
     if (!v.ok) {
       setErrores(v.errors);
       setCargando(false);
@@ -246,10 +270,12 @@ export default function SimuladorPage() {
         fechaInicioPeriodo: form.fechaInicioPeriodo,
         fechaFinPeriodo: form.fechaFinPeriodo,
         consumoActual: form.consumoActual,
-        fechaInicioPeriodoAnterior: form.fechaInicioPeriodoAnterior,
-        consumoAnterior: form.consumoAnterior,
+        periodosAnteriores: form.periodosAnteriores.map(p => ({
+          fechaInicio: p.fechaInicio,
+          fechaFin: p.fechaFin,
+          consumo: p.consumo,
+        })),
         cuotas,
-        historicoMensual: historico,
       };
 
       const res = await fetch('/api/calcular', {
@@ -338,40 +364,61 @@ export default function SimuladorPage() {
             </Field>
           </Card>
 
-          {/* Periodo anterior */}
-          <Card title="Periodo anterior (opcional, para mixtos)">
-            <Row>
-              <Field label="Inicio periodo anterior">
-                <Input
-                  type="date"
-                  value={form.fechaInicioPeriodoAnterior ?? ''}
-                  onChange={e => updateForm('fechaInicioPeriodoAnterior', e.target.value || null)}
-                />
-              </Field>
-              <Field label="Consumo anterior (kWh)">
-                <NumberInput
-                  value={form.consumoAnterior ?? 0}
-                  min={0}
-                  allowEmpty
-                  onChange={v => updateForm('consumoAnterior', v)}
-                />
-              </Field>
-            </Row>
-          </Card>
+          {/* Periodos anteriores */}
+          <Card title={`Periodos anteriores (${form.tipoPeriodo === 'BIMESTRAL' ? 'bimestrales' : 'mensuales'}, del más antiguo al más reciente)`}>
+            <p style={{ fontSize: 12, color: '#6b7280', margin: '0 0 12px' }}>
+              Se usan para el promedio móvil de 12 meses (detección DAC) y el CPD anterior (periodos mixtos).
+              {form.tipoPeriodo === 'BIMESTRAL'
+                ? ' Cada periodo bimestral se divide entre 2 para obtener el valor mensual equivalente.'
+                : ''}
+            </p>
 
-          {/* Histórico DAC */}
-          <Card title="Histórico mensual (hasta 11 meses, para promedio móvil DAC)">
-            <Field label="kWh por mes, separados por coma (del más antiguo al más reciente)">
-              <textarea
-                value={historicoStr}
-                onChange={e => setHistoricoStr(e.target.value)}
-                rows={2}
-                style={{ ...inputStyle, resize: 'vertical', width: '100%', boxSizing: 'border-box' }}
-                placeholder="200, 220, 240, ..."
-              />
-            </Field>
+            {form.periodosAnteriores.map((p, i) => (
+              <div key={i} style={{ background: '#0f1117', borderRadius: 8, padding: 12, marginBottom: 10, border: '1px solid #2a2d3e' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <span style={{ fontSize: 12, color: '#9ca3af', fontWeight: 600 }}>Periodo #{i + 1}</span>
+                  <button
+                    onClick={() => removePeriodo(i)}
+                    style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '2px 8px', borderRadius: 4 }}
+                  >Eliminar</button>
+                </div>
+                <Row>
+                  <Field label="Inicio">
+                    <Input type="date" value={p.fechaInicio} onChange={e => updatePeriodo(i, 'fechaInicio', e.target.value)} />
+                  </Field>
+                  <Field label="Fin">
+                    <Input type="date" value={p.fechaFin} onChange={e => updatePeriodo(i, 'fechaFin', e.target.value)} />
+                  </Field>
+                </Row>
+                <Field label={`Consumo (kWh)`}>
+                  <NumberInput value={p.consumo} min={0} onChange={v => updatePeriodo(i, 'consumo', v)} />
+                </Field>
+              </div>
+            ))}
+
+            <button
+              onClick={addPeriodo}
+              style={{
+                background: 'none',
+                border: '1px dashed #2a2d3e',
+                borderRadius: 8,
+                color: '#6b7280',
+                cursor: 'pointer',
+                padding: '10px 16px',
+                fontSize: 13,
+                fontWeight: 600,
+                width: '100%',
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={e => { (e.target as HTMLButtonElement).style.borderColor = '#00c896'; (e.target as HTMLButtonElement).style.color = '#00c896'; }}
+              onMouseLeave={e => { (e.target as HTMLButtonElement).style.borderColor = '#2a2d3e'; (e.target as HTMLButtonElement).style.color = '#6b7280'; }}
+            >
+              + Agregar periodo {form.tipoPeriodo === 'BIMESTRAL' ? 'bimestral' : 'mensual'} anterior
+            </button>
+
             <p style={{ fontSize: 11, color: '#6b7280', margin: '8px 0 0' }}>
-              Valores válidos detectados: <strong style={{ color: '#00c896' }}>{historico.length}</strong>
+              Periodos capturados: <strong style={{ color: '#00c896' }}>{form.periodosAnteriores.length}</strong>
+              &nbsp;·&nbsp; Valores mensuales estimados: <strong style={{ color: '#00c896' }}>{form.tipoPeriodo === 'BIMESTRAL' ? form.periodosAnteriores.length * 2 : form.periodosAnteriores.length}</strong>
             </p>
           </Card>
 

@@ -20,6 +20,7 @@ import type {
   DesgloseEscalones,
   Escalon,
   TarifaId,
+  PeriodoAnterior,
 } from '../types';
 
 // ─── Utilidades numéricas ────────────────────────────────────────────────────
@@ -263,10 +264,8 @@ export function calcularFactura(input: SimuladorInput): ResultadoCalculo {
     fechaInicioPeriodo,
     fechaFinPeriodo,
     consumoActual,
-    fechaInicioPeriodoAnterior,
-    consumoAnterior,
+    periodosAnteriores,
     cuotas,
-    historicoMensual,
   } = input;
 
   // ── 1. Días y CPD (defensivo contra fechas iguales o invertidas) ─────────
@@ -291,17 +290,25 @@ export function calcularFactura(input: SimuladorInput): ResultadoCalculo {
 
   // CPD del periodo anterior (para mixtos)
   let cpdAnterior: number | null = null;
-  if (fechaInicioPeriodoAnterior && consumoAnterior !== null) {
-    const diasAnterior = diasEntre(fechaInicioPeriodoAnterior, fechaInicioPeriodo);
-    cpdAnterior = diasAnterior > 0 ? redondear4(consumoAnterior / diasAnterior) : null;
+  if (periodosAnteriores.length > 0) {
+    const ultimo = periodosAnteriores[periodosAnteriores.length - 1];
+    const diasAnterior = diasEntre(ultimo.fechaInicio, ultimo.fechaFin);
+    cpdAnterior = diasAnterior > 0 ? redondear4(ultimo.consumo / diasAnterior) : null;
   }
 
   // ── 2. Promedio móvil 12 meses (para detección DAC) ───────────────────────
-  const historico = [...historicoMensual];
-  // Añadir consumo actual al histórico
+  // Convertir periodos anteriores a valores mensuales equivalentes
+  const valoresMensuales: number[] = periodosAnteriores.flatMap(p => {
+    if (tipoPeriodo === 'BIMESTRAL') {
+      const mensual = p.consumo / 2;
+      return [mensual, mensual];
+    }
+    return [p.consumo];
+  });
+  // Añadir consumo actual
   const consumoMensualActual = tipoPeriodo === 'BIMESTRAL' ? consumoActual / 2 : consumoActual;
-  historico.push(consumoMensualActual);
-  const ultimos12 = historico.slice(-12);
+  valoresMensuales.push(consumoMensualActual);
+  const ultimos12 = valoresMensuales.slice(-12);
   const promedioMovil12Meses =
     redondear4(ultimos12.reduce((s, v) => s + v, 0) / 12);
 

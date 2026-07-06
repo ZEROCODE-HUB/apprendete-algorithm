@@ -22,7 +22,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { calcularFactura } from '../lib/cfe-algorithm';
-import type { SimuladorInput, CuotasTarifa } from '../types';
+import type { SimuladorInput, CuotasTarifa, PeriodoAnterior } from '../types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -55,6 +55,39 @@ const CUOTAS_DAC: CuotasTarifa = {
   minimoMensual:  0,
 };
 
+/** Convierte un array de kWh mensuales en PeriodoAnterior[] (para tests con tipoPeriodo MENSUAL) */
+function periodosMensuales(kwhMensuales: number[]): PeriodoAnterior[] {
+  return kwhMensuales.map((kwh, i) => ({
+    fechaInicio: `2023-${String(i + 1).padStart(2, '0')}-01`,
+    fechaFin:   `2023-${String(i + 1).padStart(2, '0')}-28`,
+    consumo: kwh,
+  }));
+}
+
+/** Convierte un array de kWh bimestrales en PeriodoAnterior[] (para tests con tipoPeriodo BIMESTRAL) */
+function periodosBimestrales(kwhBimestrales: number[], ultimaFechaFin?: string): PeriodoAnterior[] {
+  const refFin = ultimaFechaFin ?? '2024-04-01';
+  const ref = new Date(refFin);
+  return kwhBimestrales.map((kwh, i) => {
+    // Cada periodo retrocede 2 meses desde el anterior
+    const mesesAtras = (kwhBimestrales.length - i) * 2;
+    const fin = new Date(ref);
+    fin.setMonth(fin.getMonth() - mesesAtras + 2);
+    const inicio = new Date(ref);
+    inicio.setMonth(inicio.getMonth() - mesesAtras);
+    return {
+      fechaInicio: inicio.toISOString().split('T')[0],
+      fechaFin:   fin.toISOString().split('T')[0],
+      consumo: kwh,
+    };
+  });
+}
+
+/** Crea un único periodo anterior con fechas dadas */
+function periodoUnico(inicio: string, fin: string, consumo: number): PeriodoAnterior[] {
+  return [{ fechaInicio: inicio, fechaFin: fin, consumo }];
+}
+
 /** Input base — se sobreescribe por cada test */
 const base = (overrides: Partial<SimuladorInput>): SimuladorInput => ({
   tarifa: '1',
@@ -65,10 +98,8 @@ const base = (overrides: Partial<SimuladorInput>): SimuladorInput => ({
   fechaInicioPeriodo: '2024-03-01',
   fechaFinPeriodo:   '2024-03-31',
   consumoActual: 100,
-  fechaInicioPeriodoAnterior: null,
-  consumoAnterior: null,
+  periodosAnteriores: [],
   cuotas: CUOTAS_T1,
-  historicoMensual: [],
   ...overrides,
 });
 
@@ -288,8 +319,7 @@ describe('Detección DAC por promedio móvil 12 meses', () => {
   it('NO es DAC cuando promedio está bajo el límite T1 (250 kWh/mes)', () => {
     const r = calcularFactura(base({
       consumoActual: 240,
-      // histórico de 11 meses todos en 200 kWh
-      historicoMensual: Array(11).fill(200),
+      periodosAnteriores: periodosMensuales(Array(11).fill(200)),
     }));
     // promedio 12 meses = (11*200 + 240) / 12 = 203.33...
     expect(r.esDAC).toBe(false);
@@ -299,7 +329,7 @@ describe('Detección DAC por promedio móvil 12 meses', () => {
   it('SÍ es DAC cuando promedio supera el límite T1', () => {
     const r = calcularFactura(base({
       consumoActual: 400,
-      historicoMensual: Array(11).fill(300),
+      periodosAnteriores: periodosMensuales(Array(11).fill(300)),
     }));
     // promedio = (11*300 + 400) / 12 = 308.33...
     expect(r.esDAC).toBe(true);
@@ -311,7 +341,6 @@ describe('Detección DAC por promedio móvil 12 meses', () => {
       tarifa: 'DAC',
       cuotas: CUOTAS_DAC,
       consumoActual: 100,
-      historicoMensual: [],
     }));
     expect(r.esDAC).toBe(true);
   });
@@ -319,20 +348,19 @@ describe('Detección DAC por promedio móvil 12 meses', () => {
   it('código de consumo 8 activa DAC', () => {
     const r = calcularFactura(base({
       consumoActual: 8,
-      historicoMensual: [],
     }));
     expect(r.esDAC).toBe(true);
   });
 
   it('promedio móvil usa solo los últimos 12 registros', () => {
-    // 20 registros históricos, solo los últimos 11 + actual deben contar
+    // 20 valores mensuales históricos, solo los últimos 11 + actual deben contar
     const historico = [
       ...Array(9).fill(1000),  // muy alto pero fuera de la ventana de 12
       ...Array(11).fill(100),  // dentro de la ventana
     ];
     const r = calcularFactura(base({
       consumoActual: 100,
-      historicoMensual: historico,
+      periodosAnteriores: periodosMensuales(historico),
     }));
     // promedio de los últimos 12: 11*100 + 100 = 1200 / 12 = 100 → no DAC
     expect(r.esDAC).toBe(false);
@@ -371,8 +399,7 @@ describe('Periodos mixtos — entrada de verano', () => {
 
   it('sin historial anterior — aplica CPD actual directamente (opción B)', () => {
     const r = calcularFactura(mixtoEntradaBase({
-      fechaInicioPeriodoAnterior: null,
-      consumoAnterior: null,
+      periodosAnteriores: [],
     }));
     expect(r.mixto).not.toBeNull();
     expect(r.mixto!.opcionSeleccionada).toBe('SIN_HISTORIAL');
@@ -380,10 +407,10 @@ describe('Periodos mixtos — entrada de verano', () => {
   });
 
   it('con historial — selecciona la opción de menor facturación', () => {
-    // CPD anterior bajo (100 kWh/30 días = 3.33) vs CPD actual alto
+    // CPD anterior bajo (100 kWh/31 días = 3.22) vs CPD actual = 300/61 ≈ 4.92
+    // Periodo anterior: 1 marzo → 1 abril (31 días)
     const r = calcularFactura(mixtoEntradaBase({
-      fechaInicioPeriodoAnterior: '2024-03-01',
-      consumoAnterior: 100,  // CPD anterior = 100/31 ≈ 3.22 kWh/día
+      periodosAnteriores: periodoUnico('2024-03-01', '2024-04-01', 100),
     }));
     expect(r.mixto).not.toBeNull();
     const { opcionSeleccionada, costoOpcionA, costoOpcionB } = r.mixto!;
@@ -398,8 +425,7 @@ describe('Periodos mixtos — entrada de verano', () => {
 
   it('C1 + C2 = consumo total en periodo mixto', () => {
     const r = calcularFactura(mixtoEntradaBase({
-      fechaInicioPeriodoAnterior: '2024-03-01',
-      consumoAnterior: 200,
+      periodosAnteriores: periodoUnico('2024-03-01', '2024-04-01', 200),
     }));
     const m = r.mixto!;
     // Tolerancia de 0.001 por truncado de 4 decimales
@@ -428,9 +454,9 @@ describe('Periodos mixtos — salida de verano', () => {
   });
 
   it('C1 + C2 = consumo total en salida de verano', () => {
+    // Periodo anterior: 1 agosto → 1 octubre (61 días)
     const r = calcularFactura(mixtoSalidaBase({
-      fechaInicioPeriodoAnterior: '2024-08-01',
-      consumoAnterior: 280,
+      periodosAnteriores: periodoUnico('2024-08-01', '2024-10-01', 280),
     }));
     const m = r.mixto!;
     expect(m.consumoNoVerano + m.consumoVerano).toBeCloseTo(320, 1);
@@ -596,7 +622,7 @@ describe('Integración — casos completos', () => {
       tarifa: 'DAC',
       cuotas: CUOTAS_DAC,
       consumoActual: 400,
-      historicoMensual: Array(11).fill(400),
+      periodosAnteriores: periodosMensuales(Array(11).fill(400)),
       dap: 0,
       ivaBajoFrontera: false,
     }));
@@ -613,10 +639,59 @@ describe('Integración — casos completos', () => {
 // 9. FACTURAS REALES — Agrega aquí casos de recibos CFE físicos
 // ═════════════════════════════════════════════════════════════════════════════
 
-describe('Facturas reales (agrega casos aquí)', () => {
-  it.todo('Recibo bimestral Hermosillo julio-agosto 2024 — tarifa 1E verano');
-  it.todo('Recibo mensual CDMX marzo 2024 — tarifa 1 no verano');
-  it.todo('Recibo bimestral Guadalajara mayo-junio 2024 — periodo mixto entrada verano');
+const CUOTAS_1E_REAL: CuotasTarifa = {
+  escalonesNoVerano: [
+    { kwh: 95,       precio: 1.119 },
+    { kwh: Infinity, precio: 1.361 },
+  ],
+  escalonesVerano: [
+    { kwh: 212,      precio: 0.839 },
+    { kwh: Infinity, precio: 1.039 },
+  ],
+  limiteNoVerano: 2000,
+  limiteVerano:   2000,
+  minimoMensual:  0,
+};
+
+describe('Facturas reales', () => {
+  it('Recibo Guaymas 525931016127 — Tarifa 1E, bimestral mixto entrada verano', () => {
+    // Periodo actual: 23 mar 2026 → 22 may 2026 (60 días)
+    // 38 días no verano, 22 días verano, entrada verano = 4 (1° mayo)
+    // Último periodo anterior: 22 ene 2026 → 23 mar 2026, 190 kWh (60 días)
+    // Periodos anteriores para DAC: 11 bimestres
+    const periodosAnteriores: PeriodoAnterior[] = [
+      ...periodosBimestrales(
+        [1761, 2142, 1093, 278, 277, 679, 1806, 730, 406, 168],
+        '2026-01-22'
+      ),
+      { fechaInicio: '2026-01-22', fechaFin: '2026-03-23', consumo: 190 },
+    ];
+
+    const r = calcularFactura({
+      tarifa: '1E',
+      idEntradaVerano: 4,
+      tipoPeriodo: 'BIMESTRAL',
+      dap: 82,
+      ivaBajoFrontera: false,
+      fechaInicioPeriodo: '2026-03-23',
+      fechaFinPeriodo:   '2026-05-22',
+      consumoActual: 520,
+      cuotas: CUOTAS_1E_REAL,
+      periodosAnteriores,
+    });
+
+    expect(r.esMixto).toBe(true);
+    expect(r.esEntradaVerano).toBe(true);
+    expect(r.esDAC).toBe(false);
+    expect(r.diasPeriodo).toBe(60);
+    expect(r.promedioMovil12Meses).toBeGreaterThan(0);
+    expect(r.mixto).not.toBeNull();
+    expect(r.mixto!.cpdAnterior).not.toBeNull();
+    // CPD anterior = 190/60 ≈ 3.1667 vs CPD actual = 520/60 ≈ 8.6667
+    // Opción A usa el menor CPD para no verano → menor costo
+    expect(r.mixto!.opcionSeleccionada).toBe('A');
+    expect(r.mixto!.consumoNoVerano + r.mixto!.consumoVerano).toBeCloseTo(520, 0);
+  });
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -631,9 +706,10 @@ describe('Robustez — casos límite y entradas extremas', () => {
       fechaInicioPeriodo: '2024-04-30',
       fechaFinPeriodo:   '2024-05-30',
       consumoActual: 280,
-      fechaInicioPeriodoAnterior: '2024-01-31',
-      consumoAnterior: 260,
-      historicoMensual: [200, 220, 240, 260, 280, 300, 280, 260, 240, 220, 210],
+      periodosAnteriores: [
+        ...periodosMensuales([200, 220, 240, 260, 280, 300, 280, 260, 240, 220, 210]),
+        { fechaInicio: '2024-01-31', fechaFin: '2024-04-30', consumo: 260 },
+      ],
     }));
     // Todos los campos numéricos deben ser finitos
     expect(isFinite(r.cpd)).toBe(true);
@@ -672,7 +748,7 @@ describe('Robustez — casos límite y entradas extremas', () => {
   it('histórico vacío no rompe el cálculo de promedio móvil', () => {
     const r = calcularFactura(base({
       consumoActual: 100,
-      historicoMensual: [],
+      periodosAnteriores: [],
     }));
     expect(isFinite(r.promedioMovil12Meses)).toBe(true);
   });
