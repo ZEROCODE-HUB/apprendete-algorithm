@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import type { SimuladorInput, ResultadoCalculo, TarifaId, CuotasTarifa, PeriodoAnterior } from '../types';
 import { CUOTAS_DEFAULT } from '../lib/cuotas-default';
 
@@ -711,35 +711,40 @@ interface NumberInputProps {
 }
 
 function NumberInput({ value, min, step, placeholder, allowEmpty, onChange }: NumberInputProps) {
-  // Almacenamos el string del input localmente para no perder estados intermedios
-  // pero al cambiar, parseamos y validamos
-  const display = value === null || value === undefined ? '' : String(value);
+  const [raw, setRaw] = useState<string>('');
+
+  useEffect(() => {
+    if (value === null || value === undefined) {
+      setRaw('');
+    } else {
+      setRaw(String(value));
+    }
+  }, [value]);
 
   return (
     <input
       type="text"
       inputMode="decimal"
-      value={display}
+      value={raw}
       placeholder={placeholder}
       style={inputStyle}
       onChange={e => {
-        const raw = e.target.value.replace(/,/g, '.');
-        if (raw === '' || raw === '-') {
-          if (allowEmpty) {
-            onChange(0);
-          } else {
-            onChange(0);
-          }
+        const r = e.target.value.replace(/,/g, '.');
+        if (r === '' || r === '-' || r === '.') {
+          setRaw(r);
+          onChange(0);
           return;
         }
-        const parsed = parseFloat(raw);
+        const parsed = parseFloat(r);
         if (isNaN(parsed) || !isFinite(parsed)) {
           return;
         }
         if (min !== undefined && parsed < min) {
+          setRaw(String(min));
           onChange(min);
           return;
         }
+        setRaw(r);
         onChange(parsed);
       }}
     />
