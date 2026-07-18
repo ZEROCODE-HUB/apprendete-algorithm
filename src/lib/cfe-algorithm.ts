@@ -90,6 +90,15 @@ function fechaSalidaVeranoISO(idEntradaVerano: 1 | 2 | 3 | 4, año: number): str
  * Distribuye `consumo` kWh entre los escalones dados y devuelve costo total.
  * También retorna el desglose por escalón para mostrar en UI.
  */
+const NOMBRES_ESCALONES = ['Básico', 'Intermedio', 'Excedente'] as const;
+
+function nombreEscalon(i: number, esDAC: boolean): 'Básico' | 'Intermedio' | 'Excedente' | 'DAC' {
+  if (esDAC) return 'DAC';
+  if (i < 1) return 'Básico';
+  if (i === 1) return 'Intermedio';
+  return 'Excedente';
+}
+
 function calcularCostoEscalones(
   consumo: number,
   escalones: Escalon[]
@@ -118,6 +127,7 @@ function calcularCostoEscalones(
 
     desglose.push({
       escalon: i + 1,
+      nombre: i >= NOMBRES_ESCALONES.length ? 'Excedente' : NOMBRES_ESCALONES[i],
       kwh: consumoEscalon,
       precio,
       subtotal,
@@ -174,8 +184,9 @@ function detectarMixto(
   const cruzaSalida = inicioMs < salidaMs && finMs > salidaMs && !cruzaEntrada;
 
   if (cruzaEntrada) {
-    const diasNoVerano = Math.round((entradaMs - inicioMs) / 86_400_000);
-    const diasVerano = Math.round((finMs - entradaMs) / 86_400_000);
+    // El día de entrada de verano cuenta como verano, no como no verano
+    const diasNoVerano = Math.round((entradaMs - inicioMs) / 86_400_000) - 1;
+    const diasVerano = Math.round((finMs - entradaMs) / 86_400_000) + 1;
     // Solo es mixto si hay entre 16 y 45 días de verano (tablas CFE B.2 y B.3)
     const esMixto = diasVerano >= 16 && diasVerano <= 45;
     return {
@@ -190,8 +201,8 @@ function detectarMixto(
   }
 
   if (cruzaSalida) {
-    const diasVerano = Math.round((salidaMs - inicioMs) / 86_400_000);
-    const diasNoVerano = Math.round((finMs - salidaMs) / 86_400_000);
+    const diasVerano = Math.round((salidaMs - inicioMs) / 86_400_000) + 1;
+    const diasNoVerano = Math.round((finMs - salidaMs) / 86_400_000) - 1;
     // Solo es mixto si hay entre 16 y 45 días fuera de verano (tablas CFE C.2 y C.3)
     const esMixto = diasNoVerano >= 16 && diasNoVerano <= 45;
     return {
@@ -263,11 +274,21 @@ export function calcularFactura(input: SimuladorInput): ResultadoCalculo {
     ivaBajoFrontera,
     fechaInicioPeriodo,
     fechaFinPeriodo,
-    consumoActual,
+    consumoActual: rawConsumoActual,
+    consumoAnterior: rawConsumoAnterior,
+    fechaInicioPeriodoAnterior,
+    historicoMensual,
     periodosAnteriores,
     cuotas,
     subsidio,
+    apoyoEstatal,
+    adeudoAnterior = 0,
+    pagoPrevio = 0,
   } = input;
+
+  // ── 0. Forzar consumo como entero (CFE nunca muestra decimales en kWh) ──
+  const consumoActual = Math.floor(rawConsumoActual);
+  const consumoAnterior = rawConsumoAnterior !== undefined ? Math.floor(rawConsumoAnterior) : undefined;
 
   // ── 1. Días y CPD (defensivo contra fechas iguales o invertidas) ─────────
   const diasPeriodoRaw = diasEntre(fechaInicioPeriodo, fechaFinPeriodo);
@@ -291,22 +312,28 @@ export function calcularFactura(input: SimuladorInput): ResultadoCalculo {
 
   // CPD del periodo anterior (para mixtos)
   let cpdAnterior: number | null = null;
-  if (periodosAnteriores.length > 0) {
+  if (consumoAnterior !== undefined && fechaInicioPeriodoAnterior !== undefined) {
+    const diasAnterior = diasEntre(fechaInicioPeriodoAnterior, fechaInicioPeriodo);
+    cpdAnterior = diasAnterior > 0 ? redondear4(consumoAnterior / diasAnterior) : null;
+  } else if (periodosAnteriores.length > 0) {
     const ultimo = periodosAnteriores[periodosAnteriores.length - 1];
     const diasAnterior = diasEntre(ultimo.fechaInicio, ultimo.fechaFin);
     cpdAnterior = diasAnterior > 0 ? redondear4(ultimo.consumo / diasAnterior) : null;
   }
 
   // ── 2. Promedio móvil 12 meses (para detección DAC) ───────────────────────
-  // Convertir periodos anteriores a valores mensuales equivalentes
-  const valoresMensuales: number[] = periodosAnteriores.flatMap(p => {
-    if (tipoPeriodo === 'BIMESTRAL') {
-      const mensual = p.consumo / 2;
-      return [mensual, mensual];
-    }
-    return [p.consumo];
-  });
-  // Añadir consumo actual
+  let valoresMensuales: number[];
+  if (historicoMensual !== undefined && historicoMensual.length > 0) {
+    valoresMensuales = [...historicoMensual];
+  } else {
+    valoresMensuales = periodosAnteriores.flatMap(p => {
+      if (tipoPeriodo === 'BIMESTRAL') {
+        const mensual = p.consumo / 2;
+        return [mensual, mensual];
+      }
+      return [p.consumo];
+    });
+  }
   const consumoMensualActual = tipoPeriodo === 'BIMESTRAL' ? consumoActual / 2 : consumoActual;
   valoresMensuales.push(consumoMensualActual);
   const ultimos12 = valoresMensuales.slice(-12);
@@ -322,7 +349,6 @@ export function calcularFactura(input: SimuladorInput): ResultadoCalculo {
   );
 
   // ── 4. Determinar si es verano (para periodo NO mixto) ────────────────────
-  // Para bimestral no mixto, se usa la fecha 30 días antes de la toma de lectura
   const fechaReferenciaVerano = tipoPeriodo === 'BIMESTRAL'
     ? new Date(new Date(fechaFinPeriodo).getTime() - 30 * 86_400_000)
         .toISOString().split('T')[0]
@@ -336,11 +362,7 @@ export function calcularFactura(input: SimuladorInput): ResultadoCalculo {
     ? cuotas.escalonesVerano
     : cuotas.escalonesNoVerano;
 
-  const limiteNormal = esVerano
-    ? cuotas.limiteVerano
-    : cuotas.limiteNoVerano;
-
-  // ── 6. Ajuste bimestral (duplicar escalones y límite) ─────────────────────
+  // ── 6. Ajuste bimestral (duplicar escalones) ─────────────────────────────
   let escalonesAjustados: Escalon[];
 
   if (tipoPeriodo === 'BIMESTRAL' && !infoMixto.esMixto) {
@@ -354,128 +376,85 @@ export function calcularFactura(input: SimuladorInput): ResultadoCalculo {
 
   // ── 7. Verificación DAC ───────────────────────────────────────────────────
   const limiteDAC = LIMITE_DAC[tarifa];
-  // Comparamos promedio mensual vs límite mensual
   const esDAC =
     tarifa === 'DAC' ||
     promedioMovil12Meses > limiteDAC ||
-    consumoActual === 8; // código especial de la BD
+    consumoActual === 8;
 
   // ── 8. Cálculo principal ──────────────────────────────────────────────────
-  let facturacionBasica = 0;
+  let energiaEscalones = 0;
   let escalonesAplicadosResult: DesgloseEscalones[] = [];
   let escalonesNoVeranoResult: DesgloseEscalones[] = [];
   let escalonesVeranoResult: DesgloseEscalones[] = [];
   let desglosesMixto: DesgloseMixto | null = null;
 
   if (esDAC) {
-    // ── DAC: tarifa plana (precio del último escalón sobre todo el consumo) ──
-    // El instructivo no especifica un método distinto de escalones para DAC
-    // en los documentos disponibles. Aplicamos el precio del último escalón
-    // (el más caro) sobre todo el consumo, que es la interpretación estándar.
     const precioDAC = escalonesAjustados[escalonesAjustados.length - 1]?.precio ?? 0;
     const subtotal = truncar4(consumoActual * precioDAC);
-    const dacEscalon = { escalon: 1, kwh: consumoActual, precio: precioDAC, subtotal };
-    facturacionBasica = subtotal;
+    const dacEscalon: DesgloseEscalones = { escalon: 1, nombre: 'DAC', kwh: consumoActual, precio: precioDAC, subtotal };
+    energiaEscalones = subtotal;
     escalonesAplicadosResult = [dacEscalon];
     escalonesNoVeranoResult = esVerano ? [] : [dacEscalon];
     escalonesVeranoResult = esVerano ? [dacEscalon] : [];
   } else if (infoMixto.esMixto) {
-    // ── Período mixto bimestral ───────────────────────────────────────────
     const { diasVerano, diasNoVerano } = infoMixto;
 
-    // Distribución C1/C2 – Opción A: usar menor CPD
     const distA = distribuirConsumoMixto(
-      consumoActual,
-      diasVerano,
-      diasNoVerano,
-      cpd,
-      cpdAnterior,
-      infoMixto.esEntradaVerano
+      consumoActual, diasVerano, diasNoVerano, cpd, cpdAnterior, infoMixto.esEntradaVerano
     );
 
-    // Opción B: aplicar CPD actual directamente
     const distB = {
       consumoVerano: truncar4(cpd * diasVerano),
       consumoNoVerano: truncar4(cpd * diasNoVerano),
     };
 
-    // Calcular costo de cada opción
-    const costoVeranoA = calcularCostoEscalones(
-      distA.consumoVerano,
-      cuotas.escalonesVerano
-    ).costo;
-    const costoNoVeranoA = calcularCostoEscalones(
-      distA.consumoNoVerano,
-      cuotas.escalonesNoVerano
-    ).costo;
+    const costoVeranoA = calcularCostoEscalones(distA.consumoVerano, cuotas.escalonesVerano).costo;
+    const costoNoVeranoA = calcularCostoEscalones(distA.consumoNoVerano, cuotas.escalonesNoVerano).costo;
     const costoTotalA = truncar4(costoVeranoA + costoNoVeranoA);
 
-    const costoVeranoB = calcularCostoEscalones(
-      distB.consumoVerano,
-      cuotas.escalonesVerano
-    ).costo;
-    const costoNoVeranoB = calcularCostoEscalones(
-      distB.consumoNoVerano,
-      cuotas.escalonesNoVerano
-    ).costo;
+    const costoVeranoB = calcularCostoEscalones(distB.consumoVerano, cuotas.escalonesVerano).costo;
+    const costoNoVeranoB = calcularCostoEscalones(distB.consumoNoVerano, cuotas.escalonesNoVerano).costo;
     const costoTotalB = truncar4(costoVeranoB + costoNoVeranoB);
 
-    // Seleccionar la opción de MENOR facturación (beneficio para el usuario)
-    // Si no hay historial, se aplica directamente Opción B
     let opcionSeleccionada: 'A' | 'B' | 'SIN_HISTORIAL';
     let distribucionFinal: typeof distA;
 
     if (cpdAnterior === null) {
       opcionSeleccionada = 'SIN_HISTORIAL';
       distribucionFinal = distB;
-      facturacionBasica = costoTotalB;
+      energiaEscalones = costoTotalB;
     } else if (costoTotalA <= costoTotalB) {
       opcionSeleccionada = 'A';
       distribucionFinal = distA;
-      facturacionBasica = costoTotalA;
+      energiaEscalones = costoTotalA;
     } else {
       opcionSeleccionada = 'B';
       distribucionFinal = distB;
-      facturacionBasica = costoTotalB;
+      energiaEscalones = costoTotalB;
     }
 
-    const { desglose: desgloseVerano } = calcularCostoEscalones(
-      distribucionFinal.consumoVerano,
-      cuotas.escalonesVerano
-    );
-    const { desglose: desgloseNoVerano } = calcularCostoEscalones(
-      distribucionFinal.consumoNoVerano,
-      cuotas.escalonesNoVerano
-    );
+    const { desglose: desgloseVerano } = calcularCostoEscalones(distribucionFinal.consumoVerano, cuotas.escalonesVerano);
+    const { desglose: desgloseNoVerano } = calcularCostoEscalones(distribucionFinal.consumoNoVerano, cuotas.escalonesNoVerano);
 
     escalonesNoVeranoResult = desgloseNoVerano;
     escalonesVeranoResult = desgloseVerano;
     escalonesAplicadosResult = [
-      ...desgloseNoVerano.map(e => ({ ...e, escalon: e.escalon })),
-      ...desgloseVerano.map(e => ({ ...e, escalon: e.escalon + desgloseNoVerano.length })),
+      ...desgloseNoVerano,
+      ...desgloseVerano,
     ];
 
     desglosesMixto = {
       consumoNoVerano: distribucionFinal.consumoNoVerano,
       consumoVerano: distribucionFinal.consumoVerano,
-      costoNoVerano: cpdAnterior === null
-        ? costoNoVeranoB
-        : opcionSeleccionada === 'A' ? costoNoVeranoA : costoNoVeranoB,
-      costoVerano: cpdAnterior === null
-        ? costoVeranoB
-        : opcionSeleccionada === 'A' ? costoVeranoA : costoVeranoB,
-      diasNoVerano,
-      diasVerano,
-      cpd,
-      cpdAnterior,
-      opcionSeleccionada,
+      costoNoVerano: cpdAnterior === null ? costoNoVeranoB : opcionSeleccionada === 'A' ? costoNoVeranoA : costoNoVeranoB,
+      costoVerano: cpdAnterior === null ? costoVeranoB : opcionSeleccionada === 'A' ? costoVeranoA : costoVeranoB,
+      diasNoVerano, diasVerano, cpd, cpdAnterior, opcionSeleccionada,
       costoOpcionA: cpdAnterior !== null ? costoTotalA : null,
       costoOpcionB: costoTotalB,
     };
   } else {
-    // ── Periodo normal (no mixto) ─────────────────────────────────────────
     const { costo, desglose } = calcularCostoEscalones(consumoActual, escalonesAjustados);
-    facturacionBasica = costo;
+    energiaEscalones = costo;
     escalonesAplicadosResult = desglose;
     escalonesNoVeranoResult = esVerano ? [] : desglose;
     escalonesVeranoResult = esVerano ? desglose : [];
@@ -487,28 +466,44 @@ export function calcularFactura(input: SimuladorInput): ResultadoCalculo {
       ? cuotas.minimoMensual * 2
       : cuotas.minimoMensual;
 
-  if (facturacionBasica < minimoAplicable) {
-    facturacionBasica = minimoAplicable;
+  if (energiaEscalones < minimoAplicable) {
+    energiaEscalones = minimoAplicable;
   }
 
-  // ── 10. Cadena de facturación ─────────────────────────────────────────────
-  // Para tarifa doméstica residencial: FN = FB (no aplica cargo por medición en primario)
-  const facturacionNormal = facturacionBasica;
-  // FNE = FN (factor de potencia no aplica en servicio doméstico residencial)
-  const facturacionNeta = facturacionNormal;
+  // ── 10. Cadena de facturación (nuevo orden) ───────────────────────────────
+  // 10a. Cargo fijo de suministro (se duplica en bimestral, igual que DAP)
+  const cargoFijoAplicado = tipoPeriodo === 'BIMESTRAL'
+    ? cuotas.cargoFijoSuministro * 2
+    : cuotas.cargoFijoSuministro;
 
-  // DAP (no sujeto a IVA)
+  // 10b. Energía = escalones + cargoFijoSuministro
+  const energia = truncar4(energiaEscalones + cargoFijoAplicado);
+
+  // 10c. IVA (frontera 8%, interior 16%)
+  const tasaIva = ivaBajoFrontera ? 0.08 : 0.16;
+  const iva = truncar4(energia * tasaIva);
+
+  // 10d. Facturación del periodo = energía + IVA
+  const facturacionPeriodo = truncar4(energia + iva);
+
+  // 10e. Apoyo estatal (valor positivo en input, se resta)
+  const apoyoValor = apoyoEstatal !== null && apoyoEstatal !== undefined ? apoyoEstatal : (subsidio ?? 0);
+  const apoyoEstatalAplicado = Math.max(0, apoyoValor);
+
+  // 10f. Subtotal = facturación del periodo - apoyo estatal
+  const subtotal = truncar4(facturacionPeriodo - apoyoEstatalAplicado);
+
+  // 10g. DAP (no sujeto a IVA)
   const dapAplicado = tipoPeriodo === 'BIMESTRAL' ? dap * 2 : dap;
 
-  // IVA sobre Facturación Neta Bonificada
-  const tasaIva = ivaBajoFrontera ? 0.10 : 0.16;
-  const iva = truncar4(facturacionNeta * tasaIva);
+  // 10h. Total = subtotal + DAP + adeudoAnterior - pagoPrevio
+  const totalPagar = truncar4(subtotal + dapAplicado + adeudoAnterior - pagoPrevio);
 
-  // Subsidio estatal (se resta después de IVA, antes de sumar DAP)
-  const subsidioAplicado = Math.max(0, subsidio);
-
-  // Total: FNE + IVA - Subsidio + DAP
-  const totalPagar = truncar4(facturacionNeta + iva - subsidioAplicado + dapAplicado);
+  // Aliases para retrocompatibilidad
+  const facturacionBasica = energia;
+  const facturacionNormal = energia;
+  const facturacionNeta = energia;
+  const subsidioAplicado = apoyoEstatalAplicado;
 
   return {
     esVerano,
@@ -528,10 +523,14 @@ export function calcularFactura(input: SimuladorInput): ResultadoCalculo {
     facturacionBasica,
     facturacionNormal,
     facturacionNeta,
+    facturacionPeriodo,
     dapAplicado,
     iva,
     tasaIva,
     subsidioAplicado,
+    apoyoEstatalAplicado,
+    adeudoAplicado: adeudoAnterior,
+    pagoAplicado: pagoPrevio,
     totalPagar,
     fechaEntradaVerano: infoMixto.fechaEntradaISO,
     fechaSalidaVerano: infoMixto.fechaSalidaISO,

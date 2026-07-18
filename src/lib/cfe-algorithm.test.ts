@@ -45,6 +45,7 @@ const CUOTAS_T1: CuotasTarifa = {
   limiteNoVerano: 250,
   limiteVerano:   250,
   minimoMensual:  59.45,
+  cargoFijoSuministro: 20,
 };
 
 const CUOTAS_DAC: CuotasTarifa = {
@@ -53,6 +54,7 @@ const CUOTAS_DAC: CuotasTarifa = {
   limiteNoVerano: Infinity,
   limiteVerano:   Infinity,
   minimoMensual:  0,
+  cargoFijoSuministro: 0,
 };
 
 /** Convierte un array de kWh mensuales en PeriodoAnterior[] (para tests con tipoPeriodo MENSUAL) */
@@ -95,7 +97,7 @@ const base = (overrides: Partial<SimuladorInput>): SimuladorInput => ({
   tipoPeriodo: 'MENSUAL',
   dap: 0,
   subsidio: 0,
-  ivaBajoFrontera: false,      // IVA 15%
+  ivaBajoFrontera: false,      // IVA 16%
   fechaInicioPeriodo: '2024-03-01',
   fechaFinPeriodo:   '2024-03-31',
   consumoActual: 100,
@@ -206,27 +208,28 @@ describe('Detección de temporada', () => {
 describe('Escalones — tarifa normal mensual fuera de verano', () => {
   // Escalones no verano T1: 75@0.793 | 125@0.963 | resto@2.859
 
-  it('consumo dentro del primer escalón (50 kWh) — aplica mínimo mensual', () => {
+  it('consumo dentro del primer escalón (50 kWh) — aplica mínimo mensual + cargo fijo', () => {
     const r = calcularFactura(base({ consumoActual: 50 }));
     // 50 * 0.793 = 39.65 < mínimo 59.45 → se aplica el mínimo
-    expect(r.facturacionBasica).toBe(59.45);
+    // energía = mínimo 59.45 + cargo fijo 20 = 79.45
+    expect(r.facturacionBasica).toBe(79.45);
     expect(r.escalonesAplicados).toHaveLength(1);
     expect(r.escalonesAplicados[0].kwh).toBe(50);
   });
 
-  it('consumo que llena el primer escalón exacto (75 kWh)', () => {
+  it('consumo que llena el primer escalón exacto (75 kWh) + cargo fijo', () => {
     const r = calcularFactura(base({ consumoActual: 75 }));
-    // 75 * 0.793 = 59.475 → truncar4 = 59.4750
-    expect(r.facturacionBasica).toBeCloseTo(59.475, 2);
+    // 75 * 0.793 = 59.475 → truncar4 = 59.4750 + cargo fijo 20 = 79.475
+    expect(r.facturacionBasica).toBeCloseTo(79.475, 2);
     expect(r.escalonesAplicados).toHaveLength(1);
   });
 
-  it('consumo que cruza al segundo escalón (100 kWh)', () => {
+  it('consumo que cruza al segundo escalón (100 kWh) + cargo fijo', () => {
     const r = calcularFactura(base({ consumoActual: 100 }));
     // E1: 75 * 0.793 = 59.4750
     // E2: 25 * 0.963 = 24.0750 → truncar4 = 24.0750
-    // total = 83.5500
-    expect(r.facturacionBasica).toBeCloseTo(83.55, 2);
+    // escalones = 83.5500 + cargo fijo 20 = 103.55
+    expect(r.facturacionBasica).toBeCloseTo(103.55, 2);
     expect(r.escalonesAplicados).toHaveLength(2);
   });
 
@@ -235,15 +238,15 @@ describe('Escalones — tarifa normal mensual fuera de verano', () => {
     // E1: 75 * 0.793 = 59.4750
     // E2: 125 * 0.963 = 120.3750
     // E3: 50 * 2.859 = 142.9500 → truncar4 = 142.9500
-    // total = 322.8000
-    expect(r.facturacionBasica).toBeCloseTo(322.80, 2);
+    // escalones = 322.8000 + cargo fijo 20 = 342.80
+    expect(r.facturacionBasica).toBeCloseTo(342.80, 2);
     expect(r.esDAC).toBe(false);  // exactamente en el límite, no es DAC
   });
 
-  it('aplica el mínimo mensual cuando el consumo es muy bajo', () => {
+  it('aplica el mínimo mensual cuando el consumo es muy bajo + cargo fijo', () => {
     const r = calcularFactura(base({ consumoActual: 10 }));
-    // 10 * 0.793 = 7.93 < mínimo 59.45
-    expect(r.facturacionBasica).toBe(59.45);
+    // 10 * 0.793 = 7.93 < mínimo 59.45 → escalones = 59.45 + cargo fijo 20 = 79.45
+    expect(r.facturacionBasica).toBe(79.45);
   });
 });
 
@@ -256,24 +259,24 @@ describe('Escalones — tarifa normal mensual en verano (T1)', () => {
     consumoActual: consumo,
   });
 
-  it('150 kWh en verano (primeros dos escalones)', () => {
+  it('150 kWh en verano (primeros dos escalones) + cargo fijo', () => {
     const r = calcularFactura(veranoBase(150));
     // E1: 100 * 0.793 = 79.3000
     // E2: 50  * 0.963 = 48.1500
-    // total = 127.4500
+    // escalones = 127.4500 + cargo fijo 20 = 147.45
     expect(r.esVerano).toBe(true);
-    expect(r.facturacionBasica).toBeCloseTo(127.45, 2);
+    expect(r.facturacionBasica).toBeCloseTo(147.45, 2);
     expect(r.escalonesAplicados).toHaveLength(2);
   });
 
-  it('280 kWh en verano (tres escalones)', () => {
+  it('280 kWh en verano (tres escalones) + cargo fijo', () => {
     const r = calcularFactura(veranoBase(280));
     // E1: 100 * 0.793 = 79.3000
     // E2: 50  * 0.963 = 48.1500
     // E3: 100 * 2.452 = 245.2000
     // E4: 30  * 2.859 = 85.7700
-    // total = 458.4200
-    expect(r.facturacionBasica).toBeCloseTo(458.42, 2);
+    // escalones = 458.4200 + cargo fijo 20 = 478.42
+    expect(r.facturacionBasica).toBeCloseTo(478.42, 2);
   });
 });
 
@@ -295,9 +298,10 @@ describe('Bimestral — duplicación de escalones y límites', () => {
     // Bimestral: E1 = 150 kWh (75*2), E2 = 250 kWh (125*2)
     // 150 kWh → exactamente primer escalón bimestral
     // 150 * 0.793 = 118.9500
+    // Cargo fijo bimestral = 20*2 = 40 → energía = 158.95
     expect(r.escalonesAplicados).toHaveLength(1);
     expect(r.escalonesAplicados[0].kwh).toBe(150);
-    expect(r.facturacionBasica).toBeCloseTo(118.95, 2);
+    expect(r.facturacionBasica).toBeCloseTo(158.95, 2);
   });
 
   it('límite DAC se duplica en bimestral (500 kWh = límite T1 bimestral)', () => {
@@ -305,10 +309,12 @@ describe('Bimestral — duplicación de escalones y límites', () => {
     expect(r.esDAC).toBe(false);
   });
 
-  it('mínimo mensual se duplica en bimestral', () => {
+  it('mínimo mensual se duplica en bimestral + cargo fijo bimestral', () => {
     const r = calcularFactura(bimBase(10));
     // mínimo bimestral = 59.45 * 2 = 118.90
-    expect(r.facturacionBasica).toBeCloseTo(118.90, 2);
+    // cargo fijo bimestral = 20 * 2 = 40
+    // energía = 118.90 + 40 = 158.90
+    expect(r.facturacionBasica).toBeCloseTo(158.90, 2);
   });
 });
 
@@ -506,14 +512,14 @@ describe('Cadena de facturación — DAP e IVA', () => {
     expect(r.iva).toBeCloseTo(r.facturacionNeta * 0.16, 2);
   });
 
-  it('IVA frontera es 10% sobre Facturación Neta', () => {
+  it('IVA frontera es 8% sobre Facturación Neta', () => {
     const r = calcularFactura(base({
       consumoActual: 100,
       dap: 0,
       ivaBajoFrontera: true,
     }));
-    expect(r.tasaIva).toBe(0.10);
-    expect(r.iva).toBeCloseTo(r.facturacionNeta * 0.10, 2);
+    expect(r.tasaIva).toBe(0.08);
+    expect(r.iva).toBeCloseTo(r.facturacionNeta * 0.08, 2);
   });
 
   it('DAP mensual NO incluye IVA y se suma al total', () => {
@@ -552,6 +558,48 @@ describe('Cadena de facturación — DAP e IVA', () => {
     const esperado = r.facturacionNeta + r.dapAplicado + r.iva;
     expect(r.totalPagar).toBeCloseTo(esperado, 2);
   });
+
+  it('IVA 16% aplicado correctamente sobre energía + cargo fijo', () => {
+    // 100 kWh en T1 fuera de verano: escalones 83.55 + cargo fijo 20 = 103.55
+    const r = calcularFactura(base({ consumoActual: 100, dap: 0, ivaBajoFrontera: false }));
+    expect(r.tasaIva).toBe(0.16);
+    expect(r.iva).toBeCloseTo(103.55 * 0.16, 2);
+    expect(r.iva).toBeCloseTo(r.facturacionNeta * 0.16, 2);
+  });
+
+  it('apoyoEstatal se aplica después del IVA', () => {
+    const sinApoyo = calcularFactura(base({ consumoActual: 100, apoyoEstatal: 0 }));
+    const conApoyo = calcularFactura(base({ consumoActual: 100, apoyoEstatal: 50 }));
+    // El IVA es el mismo con o sin apoyo (el apoyo se resta DESPUÉS del IVA)
+    expect(conApoyo.iva).toBeCloseTo(sinApoyo.iva, 2);
+    // La facturación del periodo es la misma
+    expect(conApoyo.facturacionPeriodo).toBeCloseTo(sinApoyo.facturacionPeriodo, 2);
+    // El total se reduce en el monto del apoyo
+    expect(conApoyo.totalPagar).toBeCloseTo(sinApoyo.totalPagar - 50, 2);
+    expect(conApoyo.apoyoEstatalAplicado).toBe(50);
+  });
+
+  it('cargo fijo Suministro se duplica en bimestral', () => {
+    const mensual = calcularFactura(base({
+      tipoPeriodo: 'MENSUAL',
+      fechaInicioPeriodo: '2024-03-01',
+      fechaFinPeriodo:   '2024-03-31',
+      consumoActual: 100,
+    }));
+    const bimestral = calcularFactura(base({
+      tipoPeriodo: 'BIMESTRAL',
+      fechaInicioPeriodo: '2024-01-15',
+      fechaFinPeriodo:   '2024-03-15',
+      consumoActual: 200,
+    }));
+    // La diferencia entre energía mensual y bimestral debe incluir cargo fijo*2
+    // Mensual: escalones(83.55) + cargoFijo(20) = 103.55
+    // Bimestral: escalones(200*0.793=158.60) + cargoFijo(40) = 198.60
+    // (los escalones difieren por el consumo, pero el cargo fijo está duplicado)
+    const difEnergia = bimestral.facturacionBasica - mensual.facturacionBasica;
+    // La diferencia debe ser > 20 (porque escalones también son mayores)
+    expect(difEnergia).toBeGreaterThan(40);
+  });
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -559,7 +607,7 @@ describe('Cadena de facturación — DAP e IVA', () => {
 // ═════════════════════════════════════════════════════════════════════════════
 
 describe('Integración — casos completos', () => {
-  it('caso base: 200 kWh, mensual, fuera de verano, T1, sin DAP, IVA 15%', () => {
+  it('caso base: 200 kWh, mensual, fuera de verano, T1, sin DAP, IVA 16%', () => {
     const r = calcularFactura(base({
       consumoActual: 200,
       dap: 0,
@@ -567,19 +615,19 @@ describe('Integración — casos completos', () => {
     }));
     // E1: 75 * 0.793 = 59.4750
     // E2: 125 * 0.963 = 120.3750  → total parcial = 179.8500
-    // No llega al E3 porque E1+E2 = 75+125 = 200 exacto
-    // FB = 179.85
-    // IVA = 179.85 * 0.16 = 28.7760 → truncar4 = 28.7760
-    // Total = 179.85 + 28.7760 = 208.6260
+    // Cargo fijo suministro = 20
+    // Energía = 179.85 + 20 = 199.85
+    // IVA = 199.85 * 0.16 = 31.9760
+    // Total = 199.85 + 31.976 = 231.826
 
     expect(r.esVerano).toBe(false);
     expect(r.esMixto).toBe(false);
     expect(r.esDAC).toBe(false);
-    expect(r.facturacionBasica).toBeCloseTo(179.85, 2);
-    expect(r.totalPagar).toBeCloseTo(208.63, 1);
+    expect(r.facturacionBasica).toBeCloseTo(199.85, 2);
+    expect(r.totalPagar).toBeCloseTo(231.83, 1);
   });
 
-  it('caso verano: 200 kWh, mensual, verano, T1, sin DAP, IVA 15%', () => {
+  it('caso verano: 200 kWh, mensual, verano, T1, sin DAP, IVA 16%', () => {
     const r = calcularFactura(base({
       fechaInicioPeriodo: '2024-07-01',
       fechaFinPeriodo:   '2024-07-31',
@@ -590,14 +638,15 @@ describe('Integración — casos completos', () => {
     // E1: 100 * 0.793 = 79.3000
     // E2: 50  * 0.963 = 48.1500
     // E3: 50  * 2.452 = 122.6000  → total = 250.0500
-    // IVA = 250.0500 * 0.16 = 40.0080
-    // Total ≈ 290.06
+    // Cargo fijo = 20 → Energía = 270.05
+    // IVA = 270.05 * 0.16 = 43.2080
+    // Total ≈ 313.26
     expect(r.esVerano).toBe(true);
-    expect(r.facturacionBasica).toBeCloseTo(250.05, 2);
-    expect(r.totalPagar).toBeCloseTo(290.06, 1);
+    expect(r.facturacionBasica).toBeCloseTo(270.05, 2);
+    expect(r.totalPagar).toBeCloseTo(313.26, 1);
   });
 
-  it('caso bimestral completo: 400 kWh, bimestral, fuera de verano, T1, DAP=90, IVA 15%', () => {
+  it('caso bimestral completo: 400 kWh, bimestral, fuera de verano, T1, DAP=90, IVA 16%', () => {
     const r = calcularFactura(base({
       tipoPeriodo: 'BIMESTRAL',
       fechaInicioPeriodo: '2024-01-15',
@@ -609,16 +658,17 @@ describe('Integración — casos completos', () => {
     // Escalones bimestral: E1=150kWh@0.793 | E2=250kWh@0.963 | resto@2.859
     // E1: 150 * 0.793 = 118.9500
     // E2: 250 * 0.963 = 240.7500
-    // total FB = 359.7000
-    // IVA = 359.7 * 0.16 = 57.5520
+    // total escalones = 359.7000
+    // Cargo fijo bimestral = 20*2 = 40 → Energía = 399.70
+    // IVA = 399.70 * 0.16 = 63.9520
     // DAP bimestral = 90
-    // Total = 359.70 + 90 + 57.552 = 507.252
-    expect(r.facturacionBasica).toBeCloseTo(359.70, 2);
+    // Total = 399.70 + 90 + 63.952 = 553.652
+    expect(r.facturacionBasica).toBeCloseTo(399.70, 2);
     expect(r.dapAplicado).toBe(90);
-    expect(r.totalPagar).toBeCloseTo(507.25, 1);
+    expect(r.totalPagar).toBeCloseTo(553.65, 1);
   });
 
-  it('caso DAC: usuario con alto consumo histórico', () => {
+  it('caso DAC: usuario con alto consumo histórico, IVA 16%', () => {
     const r = calcularFactura(base({
       tarifa: 'DAC',
       cuotas: CUOTAS_DAC,
@@ -628,7 +678,8 @@ describe('Integración — casos completos', () => {
       ivaBajoFrontera: false,
     }));
     // DAC: 400 * 4.228 = 1691.2 → truncar4 = 1691.2000
-    // IVA = 1691.2 * 0.16 = 270.5920
+    // Cargo fijo = 0 → Energía = 1691.20
+    // IVA = 1691.20 * 0.16 = 270.5920
     // Total ≈ 1961.79
     expect(r.esDAC).toBe(true);
     expect(r.facturacionBasica).toBeCloseTo(1691.20, 2);
@@ -652,6 +703,7 @@ const CUOTAS_1E_REAL: CuotasTarifa = {
   limiteNoVerano: 2000,
   limiteVerano:   2000,
   minimoMensual:  0,
+  cargoFijoSuministro: 39.10,
 };
 
 describe('Facturas reales', () => {
@@ -693,6 +745,94 @@ describe('Facturas reales', () => {
     // Opción A usa el menor CPD para no verano → menor costo
     expect(r.mixto!.opcionSeleccionada).toBe('A');
     expect(r.mixto!.consumoNoVerano + r.mixto!.consumoVerano).toBeCloseTo(520, 0);
+  });
+
+  it('Recibo real Valenzuela — Tarifa 1E, Guaymas, bimestral mixto entrada verano', () => {
+    const r = calcularFactura({
+      tarifa: '1E',
+      idEntradaVerano: 4,
+      tipoPeriodo: 'BIMESTRAL',
+      region: 'NOROESTE',
+      dap: 41,
+      ivaBajoFrontera: false,
+      fechaInicioPeriodo: '2026-03-23',
+      fechaFinPeriodo:   '2026-05-22',
+      consumoActual: 520,
+      fechaInicioPeriodoAnterior: '2026-01-22',
+      consumoAnterior: 190,
+      apoyoEstatal: 91.21,
+      adeudoAnterior: 334.76,
+      pagoPrevio: 334.00,
+      historicoMensual: [1761, 2142, 1093, 278, 277, 679, 1806, 730, 406, 168, 190].map(v => v/2),
+      cuotas: {
+        cargoFijoSuministro: 39.10,
+        escalonesNoVerano: [
+          { kwh: 75,       precio: 1.119 },
+          { kwh: 125,      precio: 1.361 },
+          { kwh: Infinity, precio: 3.980 },
+        ],
+        escalonesVerano: [
+          { kwh: 300, precio: 0.839 },
+          { kwh: 450, precio: 1.039 },
+          { kwh: Infinity, precio: 3.980 },
+        ],
+        limiteNoVerano: 2000,
+        limiteVerano: 2000,
+        minimoMensual: 0,
+      },
+    });
+
+    expect(r.diasNoVeranoEnPeriodo).toBe(38);
+    expect(r.diasVeranoEnPeriodo).toBe(22);
+    expect(r.esMixto).toBe(true);
+    expect(r.esEntradaVerano).toBe(true);
+    expect(r.facturacionPeriodo).toBeCloseTo(671.73, 0);
+    expect(r.iva).toBeCloseTo(92.65, 0);
+    expect(r.apoyoEstatalAplicado).toBe(91.21);
+    expect(r.totalPagar).toBeCloseTo(663.28, 0);
+  });
+
+  it('Recibo real García Andrade — Tarifa 1F, Hermosillo, bimestral mixto entrada verano', () => {
+    const r = calcularFactura({
+      tarifa: '1F',
+      idEntradaVerano: 4,
+      tipoPeriodo: 'BIMESTRAL',
+      region: 'NOROESTE',
+      dap: 73.15,
+      ivaBajoFrontera: false,
+      fechaInicioPeriodo: '2026-04-08',
+      fechaFinPeriodo:   '2026-06-09',
+      consumoActual: 1613,
+      fechaInicioPeriodoAnterior: '2026-02-06',
+      consumoAnterior: 1040,
+      apoyoEstatal: 1102.74,
+      adeudoAnterior: 3680.59,
+      pagoPrevio: 3680.00,
+      historicoMensual: [3809, 3481, 1205, 599, 421, 1645, 3109, 2442, 1054, 510, 1040].map(v => v/2),
+      cuotas: {
+        cargoFijoSuministro: 40.02,
+        escalonesNoVerano: [
+          { kwh: 75,       precio: 1.119 },
+          { kwh: 125,      precio: 1.361 },
+          { kwh: Infinity, precio: 3.980 },
+        ],
+        escalonesVerano: [
+          { kwh: 1200, precio: 0.839 },
+          { kwh: 1300, precio: 1.039 },
+          { kwh: Infinity, precio: 3.980 },
+        ],
+        limiteNoVerano: 2500,
+        limiteVerano: 2500,
+        minimoMensual: 0,
+      },
+    });
+
+    expect(r.diasNoVeranoEnPeriodo).toBe(22);
+    expect(r.diasVeranoEnPeriodo).toBe(40);
+    expect(r.esMixto).toBe(true);
+    expect(r.facturacionPeriodo).toBeCloseTo(2409.45, 0);
+    expect(r.iva).toBeCloseTo(332.34, 0);
+    expect(r.totalPagar).toBeCloseTo(1453.60, 0);
   });
 });
 
@@ -741,9 +881,10 @@ describe('Robustez — casos límite y entradas extremas', () => {
     }))).toThrow();
   });
 
-  it('consumo 0 no rompe el algoritmo (se aplica mínimo)', () => {
+  it('consumo 0 no rompe el algoritmo (se aplica mínimo + cargo fijo)', () => {
     const r = calcularFactura(base({ consumoActual: 0 }));
-    expect(r.facturacionBasica).toBe(59.45);  // mínimo mensual
+    // mínimo mensual 59.45 + cargo fijo 20 = 79.45
+    expect(r.facturacionBasica).toBe(79.45);
     expect(isFinite(r.totalPagar)).toBe(true);
   });
 

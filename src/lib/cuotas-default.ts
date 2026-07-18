@@ -26,6 +26,7 @@ export const CUOTAS_DEFAULT: Record<TarifaId, CuotasTarifa> = {
     limiteNoVerano: 250,
     limiteVerano: 250,
     minimoMensual: 59.45,
+    cargoFijoSuministro: 20,
   },
   '1A': {
     escalonesNoVerano: [
@@ -42,6 +43,7 @@ export const CUOTAS_DEFAULT: Record<TarifaId, CuotasTarifa> = {
     limiteNoVerano: 300,
     limiteVerano: 300,
     minimoMensual: 79.27,
+    cargoFijoSuministro: 22,
   },
   '1B': {
     escalonesNoVerano: [
@@ -58,6 +60,7 @@ export const CUOTAS_DEFAULT: Record<TarifaId, CuotasTarifa> = {
     limiteNoVerano: 400,
     limiteVerano: 400,
     minimoMensual: 119.05,
+    cargoFijoSuministro: 25,
   },
   '1C': {
     escalonesNoVerano: [
@@ -74,6 +77,7 @@ export const CUOTAS_DEFAULT: Record<TarifaId, CuotasTarifa> = {
     limiteNoVerano: 850,
     limiteVerano: 850,
     minimoMensual: 138.78,
+    cargoFijoSuministro: 28,
   },
   '1D': {
     escalonesNoVerano: [
@@ -90,6 +94,7 @@ export const CUOTAS_DEFAULT: Record<TarifaId, CuotasTarifa> = {
     limiteNoVerano: 1000,
     limiteVerano: 1000,
     minimoMensual: 138.78,
+    cargoFijoSuministro: 32,
   },
   '1E': {
     escalonesNoVerano: [
@@ -106,6 +111,7 @@ export const CUOTAS_DEFAULT: Record<TarifaId, CuotasTarifa> = {
     limiteNoVerano: 2000,
     limiteVerano: 2000,
     minimoMensual: 138.78,
+    cargoFijoSuministro: 39.10,
   },
   '1F': {
     escalonesNoVerano: [
@@ -122,6 +128,7 @@ export const CUOTAS_DEFAULT: Record<TarifaId, CuotasTarifa> = {
     limiteNoVerano: 2500,
     limiteVerano: 2500,
     minimoMensual: 138.78,
+    cargoFijoSuministro: 40.02,
   },
   'DAC': {
     escalonesNoVerano: [
@@ -133,5 +140,6 @@ export const CUOTAS_DEFAULT: Record<TarifaId, CuotasTarifa> = {
     limiteNoVerano: Infinity,
     limiteVerano: Infinity,
     minimoMensual: 0,
+    cargoFijoSuministro: 45,
   },
 };

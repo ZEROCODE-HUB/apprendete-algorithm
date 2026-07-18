@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import type { SimuladorInput, ResultadoCalculo, TarifaId, CuotasTarifa, PeriodoAnterior, DesgloseEscalones } from '../types';
+import type { SimuladorInput, ResultadoCalculo, TarifaId, CuotasTarifa, PeriodoAnterior, DesgloseEscalones, RegionTarifaria } from '../types';
 import { CUOTAS_DEFAULT } from '../lib/cuotas-default';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -50,6 +50,7 @@ const MESES_ENTRADA: Record<IdEntradaVerano, string> = {
   3: 'Abril',
   4: 'Mayo',
 };
+const REGIONES: RegionTarifaria[] = ['NOROESTE', 'NORTE', 'NORESTE', 'CENTRAL', 'SUR', 'PENINSULAR', 'BAJA_CALIFORNIA', 'BAJA_CALIFORNIA_SUR'];
 
 // Fechas iniciales fijas (para evitar problemas de hidratación SSR)
 const FECHA_HOY = '2024-05-30';
@@ -70,12 +71,15 @@ interface FormState {
   tarifa: TarifaId;
   idEntradaVerano: IdEntradaVerano;
   tipoPeriodo: 'MENSUAL' | 'BIMESTRAL';
+  region: RegionTarifaria;
   dap: number;
-  subsidio: number;
+  apoyoEstatal: number;
   ivaBajoFrontera: boolean;
   fechaInicioPeriodo: string;
   fechaFinPeriodo: string;
   consumoActual: number;
+  adeudoAnterior: number;
+  pagoPrevio: number;
   periodosAnteriores: PeriodoAnteriorInput[];
 }
 
@@ -83,12 +87,15 @@ const ESTADO_INICIAL: FormState = {
   tarifa: '1',
   idEntradaVerano: 4,
   tipoPeriodo: 'BIMESTRAL',
+  region: 'NOROESTE',
   dap: 45,
-  subsidio: 0,
+  apoyoEstatal: 0,
   ivaBajoFrontera: false,
   fechaInicioPeriodo: FECHA_HACE_60,
   fechaFinPeriodo: FECHA_HOY,
   consumoActual: 280,
+  adeudoAnterior: 0,
+  pagoPrevio: 0,
   periodosAnteriores: [],
 };
 
@@ -267,12 +274,15 @@ export default function SimuladorPage() {
         tarifa: form.tarifa,
         idEntradaVerano: form.idEntradaVerano,
         tipoPeriodo: form.tipoPeriodo,
+        region: form.region,
         dap: form.dap,
-        subsidio: form.subsidio,
+        apoyoEstatal: form.apoyoEstatal,
         ivaBajoFrontera: form.ivaBajoFrontera,
         fechaInicioPeriodo: form.fechaInicioPeriodo,
         fechaFinPeriodo: form.fechaFinPeriodo,
         consumoActual: form.consumoActual,
+        adeudoAnterior: form.adeudoAnterior,
+        pagoPrevio: form.pagoPrevio,
         periodosAnteriores: form.periodosAnteriores.map(p => ({
           fechaInicio: p.fechaInicio,
           fechaFin: p.fechaFin,
@@ -345,15 +355,19 @@ export default function SimuladorPage() {
               </Field>
             </Row>
             <Row>
-              <Field label="Subsidio estatal ($ por periodo)">
-                <NumberInput value={form.subsidio} min={0} onChange={v => updateForm('subsidio', v)} />
+              <Field label="Apoyo estatal ($ por periodo)">
+                <NumberInput value={form.apoyoEstatal} min={0} onChange={v => updateForm('apoyoEstatal', v)} />
               </Field>
-              <div style={{ flex: 1 }} />
+              <Field label="Región tarifaria">
+                <Select value={form.region} onChange={e => updateForm('region', e.target.value as RegionTarifaria)}>
+                  {REGIONES.map(r => <option key={r} value={r}>{r.replace(/_/g, ' ')}</option>)}
+                </Select>
+              </Field>
             </Row>
             <Field label="Región IVA">
               <Select value={form.ivaBajoFrontera ? 'frontera' : 'normal'} onChange={e => updateForm('ivaBajoFrontera', e.target.value === 'frontera')}>
                 <option value="normal">Interior (16%)</option>
-                <option value="frontera">Frontera/BC/BCS/QROO (10%)</option>
+                <option value="frontera">Frontera/BC/BCS/QROO (8%)</option>
               </Select>
             </Field>
           </Card>
@@ -371,6 +385,18 @@ export default function SimuladorPage() {
             <Field label="Consumo actual (kWh)">
               <NumberInput value={form.consumoActual} min={0} onChange={v => updateForm('consumoActual', v)} />
             </Field>
+          </Card>
+
+          {/* Adeudo anterior y pagos previos */}
+          <Card title="Adeudo y pagos previos">
+            <Row>
+              <Field label="Adeudo de periodo anterior ($)">
+                <NumberInput value={form.adeudoAnterior} min={0} onChange={v => updateForm('adeudoAnterior', v)} />
+              </Field>
+              <Field label="Pago previo ($)">
+                <NumberInput value={form.pagoPrevio} min={0} onChange={v => updateForm('pagoPrevio', v)} />
+              </Field>
+            </Row>
           </Card>
 
           {/* Periodos anteriores */}
@@ -650,13 +676,15 @@ function Resultados({ r }: { r: ResultadoCalculo }) {
 
       <Card title="Cadena de facturación">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <LineaFactura label="Facturación Básica (FB)" valor={r.facturacionBasica} />
-          <LineaFactura label="Facturación Normal (FN)" valor={r.facturacionNormal} muted />
-          <LineaFactura label="Facturación Neta (FNE)" valor={r.facturacionNeta} muted />
-          <div style={{ borderTop: '1px solid #2a2d3e', margin: '8px 0' }} />
-          <LineaFactura label="DAP (sin IVA)" valor={r.dapAplicado} accent="#6b7280" />
+          <LineaFactura label="Energía (escalones + cargo fijo suministro)" valor={r.facturacionNeta} />
           <LineaFactura label={`IVA (${(r.tasaIva * 100).toFixed(0)}%)`} valor={r.iva} accent="#f59e0b" />
-          {r.subsidioAplicado > 0 && <LineaFactura label="Subsidio estatal" valor={-r.subsidioAplicado} accent="#22d3ee" />}
+          <LineaFactura label="Facturación del periodo" valor={r.facturacionPeriodo} accent="#a78bfa" />
+          <div style={{ borderTop: '1px solid #2a2d3e', margin: '8px 0' }} />
+          {r.apoyoEstatalAplicado > 0 && <LineaFactura label="Apoyo estatal" valor={-r.apoyoEstatalAplicado} accent="#22d3ee" />}
+          <LineaFactura label="Subtotal" valor={r.facturacionPeriodo - r.apoyoEstatalAplicado} accent="#6b7280" />
+          <LineaFactura label="DAP (sin IVA)" valor={r.dapAplicado} accent="#6b7280" />
+          {r.adeudoAplicado > 0 && <LineaFactura label="Adeudo periodo anterior" valor={r.adeudoAplicado} accent="#f59e0b" />}
+          {r.pagoAplicado > 0 && <LineaFactura label="Pago previo" valor={-r.pagoAplicado} accent="#22d3ee" />}
           <div style={{ borderTop: '2px solid #2a2d3e', margin: '8px 0' }} />
         </div>
 
@@ -819,7 +847,7 @@ function EscalonesTable({ escalones }: { escalones: DesgloseEscalones[] }) {
     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
       <thead>
         <tr style={{ borderBottom: '1px solid #2a2d3e' }}>
-          <th style={thStyle}>Escalón</th>
+          <th style={thStyle}>Tramo</th>
           <th style={thStyle}>kWh consumidos</th>
           <th style={thStyle}>$/kWh</th>
           <th style={thStyle}>Subtotal</th>
@@ -828,7 +856,7 @@ function EscalonesTable({ escalones }: { escalones: DesgloseEscalones[] }) {
       <tbody>
         {escalones.map((e, i) => (
           <tr key={i} style={{ borderBottom: '1px solid #1f2937' }}>
-            <td style={tdStyle}>{e.escalon}</td>
+            <td style={tdStyle}>{e.nombre}</td>
             <td style={tdStyle}>{fmtKWh(e.kwh)}</td>
             <td style={tdStyle}>${fmt(e.precio)}</td>
             <td style={{ ...tdStyle, color: '#00c896' }}>{fmtMXN(e.subtotal)}</td>
