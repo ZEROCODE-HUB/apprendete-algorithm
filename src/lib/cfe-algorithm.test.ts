@@ -867,11 +867,14 @@ describe('Robustez — casos límite y entradas extremas', () => {
     expect(r.escalonesAplicados.every(e => isFinite(e.subtotal))).toBe(true);
   });
 
-  it('fechas iguales lanza error legible (no NaN silencioso)', () => {
-    expect(() => calcularFactura(base({
+  it('fechas iguales no lanza error (periodo de 0 días se maneja con 1 día efectivo)', () => {
+    const r = calcularFactura(base({
       fechaInicioPeriodo: '2024-03-15',
       fechaFinPeriodo:   '2024-03-15',
-    }))).toThrow();
+      consumoActual: 30,
+    }));
+    expect(isFinite(r.cpd)).toBe(true);
+    expect(isFinite(r.totalPagar)).toBe(true);
   });
 
   it('fecha de fin anterior a fecha de inicio lanza error', () => {

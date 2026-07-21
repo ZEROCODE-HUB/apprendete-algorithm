@@ -119,13 +119,10 @@ function validar(form: FormState, cuotas: CuotasTarifa): ValidationResult {
     const fin = new Date(form.fechaFinPeriodo);
     if (isNaN(inicio.getTime()) || isNaN(fin.getTime())) {
       errors.push('Las fechas del periodo actual no son válidas.');
-    } else if (inicio >= fin) {
-      errors.push('La fecha de inicio del periodo debe ser anterior a la fecha de fin.');
+    } else if (inicio > fin) {
+      errors.push('La fecha de inicio no puede ser posterior a la fecha de fin.');
     } else {
       const dias = Math.round((fin.getTime() - inicio.getTime()) / 86_400_000);
-      if (dias < 1) {
-        errors.push('El periodo debe tener al menos 1 día de duración.');
-      }
       if (form.tipoPeriodo === 'MENSUAL' && dias > 45) {
         errors.push(`El periodo mensual tiene ${dias} días (máximo permitido ~45).`);
       }
@@ -147,8 +144,8 @@ function validar(form: FormState, cuotas: CuotasTarifa): ValidationResult {
     const pFin = new Date(p.fechaFin);
     if (isNaN(pInicio.getTime()) || isNaN(pFin.getTime())) {
       errors.push(`Periodo anterior #${idx}: fechas no válidas.`);
-    } else if (pInicio >= pFin) {
-      errors.push(`Periodo anterior #${idx}: la fecha de inicio debe ser anterior a la de fin.`);
+    } else if (pInicio > pFin) {
+      errors.push(`Periodo anterior #${idx}: la fecha de inicio no puede ser posterior a la de fin.`);
     }
     if (p.consumo < 0 || !isFinite(p.consumo)) {
       errors.push(`Periodo anterior #${idx}: consumo inválido (${p.consumo}).`);

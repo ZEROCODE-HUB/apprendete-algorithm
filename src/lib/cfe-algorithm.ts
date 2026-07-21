@@ -290,16 +290,17 @@ export function calcularFactura(input: SimuladorInput): ResultadoCalculo {
   const consumoActual = Math.floor(rawConsumoActual);
   const consumoAnterior = rawConsumoAnterior !== undefined ? Math.floor(rawConsumoAnterior) : undefined;
 
-  // ── 1. Días y CPD (defensivo contra fechas iguales o invertidas) ─────────
-  const diasPeriodoRaw = diasEntre(fechaInicioPeriodo, fechaFinPeriodo);
-  if (diasPeriodoRaw <= 0) {
-    throw new Error('La fecha de fin del periodo debe ser posterior a la fecha de inicio.');
+  // ── 1. Días y CPD (defensivo contra fechas invertidas) ─────────
+  const diasPeriodo = diasEntre(fechaInicioPeriodo, fechaFinPeriodo);
+  if (diasPeriodo < 0) {
+    throw new Error('La fecha de fin no puede ser anterior a la fecha de inicio.');
   }
   if (!isFinite(consumoActual) || consumoActual < 0) {
     throw new Error('El consumo actual debe ser un número positivo válido.');
   }
-  const diasPeriodo = diasPeriodoRaw;
-  const cpd = redondear4(consumoActual / diasPeriodo);
+  // Si el periodo es de 0 días, asumimos 1 día para evitar división entre 0
+  const diasEfectivos = diasPeriodo || 1;
+  const cpd = redondear4(consumoActual / diasEfectivos);
 
   // Pronóstico
   let diasFacturacion: number;
