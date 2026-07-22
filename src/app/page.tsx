@@ -644,6 +644,9 @@ export default function SimuladorPage() {
             <Field label="Mínimo mensual ($)">
               <NumberInput value={cuotas.minimoMensual} min={0} step={0.01} onChange={v => setCuotas(c => ({ ...c, minimoMensual: v }))} />
             </Field>
+            <Field label="Cargo fijo suministro ($/mes)">
+              <NumberInput value={cuotas.cargoFijoSuministro} min={0} step={0.01} onChange={v => setCuotas(c => ({ ...c, cargoFijoSuministro: v }))} />
+            </Field>
           </Card>
 
           {/* Validación en vivo */}
