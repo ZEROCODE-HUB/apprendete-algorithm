@@ -113,7 +113,8 @@ function calcularCostoEscalones(
     let sobrante: number;
 
     // Manejo defensivo de escalones infinitos para evitar NaN
-    if (!isFinite(kwh)) {
+    // (null: JSON.stringify convierte Infinity a null)
+    if (kwh === null || !isFinite(kwh)) {
       // Escalón "resto" — absorbe todo lo que quede
       consumoEscalon = restante;
       sobrante = 0;
@@ -369,7 +370,7 @@ export function calcularFactura(input: SimuladorInput): ResultadoCalculo {
   if (tipoPeriodo === 'BIMESTRAL' && !infoMixto.esMixto) {
     escalonesAjustados = escalonesNormales.map(e => ({
       ...e,
-      kwh: isFinite(e.kwh) ? e.kwh * 2 : e.kwh,
+      kwh: e.kwh === null || !isFinite(e.kwh) ? Infinity : e.kwh * 2,
     }));
   } else {
     escalonesAjustados = escalonesNormales;
