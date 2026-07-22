@@ -99,6 +99,35 @@ const ESTADO_INICIAL: FormState = {
   periodosAnteriores: [],
 };
 
+const EJEMPLO_CUOTAS: CuotasTarifa = {
+  escalonesNoVerano: [
+    { kwh: 95, precio: 1.119 },
+    { kwh: Infinity, precio: 1.361 },
+  ],
+  escalonesVerano: [
+    { kwh: 212, precio: 0.839 },
+    { kwh: Infinity, precio: 1.039 },
+  ],
+  limiteNoVerano: 2000,
+  limiteVerano: 2000,
+  minimoMensual: 0,
+  cargoFijoSuministro: 39.10,
+};
+
+const EJEMPLO_PERIODOS: PeriodoAnteriorInput[] = [
+  { fechaInicio: '2024-05-23', fechaFin: '2024-07-23', consumo: 1761 },
+  { fechaInicio: '2024-07-23', fechaFin: '2024-09-23', consumo: 2142 },
+  { fechaInicio: '2024-09-23', fechaFin: '2024-11-25', consumo: 1093 },
+  { fechaInicio: '2024-11-25', fechaFin: '2025-01-22', consumo: 278 },
+  { fechaInicio: '2025-01-22', fechaFin: '2025-03-24', consumo: 277 },
+  { fechaInicio: '2025-03-24', fechaFin: '2025-05-22', consumo: 679 },
+  { fechaInicio: '2025-05-22', fechaFin: '2025-07-22', consumo: 1806 },
+  { fechaInicio: '2025-07-22', fechaFin: '2025-09-23', consumo: 730 },
+  { fechaInicio: '2025-09-23', fechaFin: '2025-11-24', consumo: 406 },
+  { fechaInicio: '2025-11-24', fechaFin: '2026-01-22', consumo: 168 },
+  { fechaInicio: '2026-01-22', fechaFin: '2026-03-23', consumo: 190 },
+];
+
 // ═══════════════════════════════════════════════════════════════════════════
 // VALIDACIONES
 // ═══════════════════════════════════════════════════════════════════════════
@@ -246,6 +275,34 @@ export default function SimuladorPage() {
     setForm(f => ({ ...f, tarifa: t }));
     setCuotas(CUOTAS_DEFAULT[t]);
     setResultado(null);
+  };
+
+  const handleLoadEjemplo = () => {
+    setForm({
+      tarifa: '1E',
+      idEntradaVerano: 4,
+      tipoPeriodo: 'BIMESTRAL',
+      region: 'NOROESTE',
+      dap: 82,
+      apoyoEstatal: 0,
+      ivaBajoFrontera: false,
+      fechaInicioPeriodo: '2026-03-23',
+      fechaFinPeriodo: '2026-05-22',
+      consumoActual: 520,
+      adeudoAnterior: 0,
+      pagoPrevio: 0,
+      periodosAnteriores: EJEMPLO_PERIODOS,
+    });
+    setCuotas(EJEMPLO_CUOTAS);
+    setResultado(null);
+    setErrores([]);
+  };
+
+  const handleReset = () => {
+    setForm(ESTADO_INICIAL);
+    setCuotas(CUOTAS_DEFAULT['1']);
+    setResultado(null);
+    setErrores([]);
   };
 
   // Helpers de cambio de form con tipado correcto
@@ -597,6 +654,43 @@ export default function SimuladorPage() {
               </ul>
             </div>
           )}
+
+          <div style={{ display: 'flex', gap: 12 }}>
+            <button
+              onClick={handleLoadEjemplo}
+              style={{
+                background: '#1a1d2e',
+                color: '#e8eaf0',
+                border: '1px solid #2a2d3e',
+                borderRadius: 10,
+                padding: '14px 24px',
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                flex: 1,
+              }}
+            >
+              Cargar ejemplo (525931016127)
+            </button>
+            <button
+              onClick={handleReset}
+              style={{
+                background: '#1a1d2e',
+                color: '#f87171',
+                border: '1px solid #7f1d1d',
+                borderRadius: 10,
+                padding: '14px 24px',
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                flex: 1,
+              }}
+            >
+              Reiniciar campos
+            </button>
+          </div>
 
           <button
             onClick={calcular}
