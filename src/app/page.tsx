@@ -512,7 +512,7 @@ export default function SimuladorPage() {
                     placeholder="∞"
                     onChange={v => {
                       const next = [...cuotas.escalonesNoVerano];
-                      next[i] = { ...next[i], kwh: v === null ? Infinity : v };
+                      next[i] = { ...next[i], kwh: !isFinite(v) ? Infinity : v };
                       setCuotas(c => ({ ...c, escalonesNoVerano: next }));
                     }}
                   />
@@ -543,7 +543,7 @@ export default function SimuladorPage() {
                     placeholder="∞"
                     onChange={v => {
                       const next = [...cuotas.escalonesVerano];
-                      next[i] = { ...next[i], kwh: v === null ? Infinity : v };
+                      next[i] = { ...next[i], kwh: !isFinite(v) ? Infinity : v };
                       setCuotas(c => ({ ...c, escalonesVerano: next }));
                     }}
                   />
@@ -570,7 +570,7 @@ export default function SimuladorPage() {
                   allowEmpty
                   allowInfinity
                   placeholder="∞"
-                  onChange={v => setCuotas(c => ({ ...c, limiteNoVerano: v === null ? Infinity : v }))}
+                  onChange={v => setCuotas(c => ({ ...c, limiteNoVerano: !isFinite(v) ? Infinity : v }))}
                 />
               </Field>
               <Field label="Límite verano (kWh/mes)">
@@ -579,7 +579,7 @@ export default function SimuladorPage() {
                   allowEmpty
                   allowInfinity
                   placeholder="∞"
-                  onChange={v => setCuotas(c => ({ ...c, limiteVerano: v === null ? Infinity : v }))}
+                  onChange={v => setCuotas(c => ({ ...c, limiteVerano: !isFinite(v) ? Infinity : v }))}
                 />
               </Field>
             </Row>
@@ -765,16 +765,18 @@ interface NumberInputProps {
   onChange: (value: number) => void;
 }
 
-function NumberInput({ value, min, step, placeholder, allowEmpty, onChange }: NumberInputProps) {
+function NumberInput({ value, min, step, placeholder, allowEmpty, allowInfinity, onChange }: NumberInputProps) {
   const [raw, setRaw] = useState<string>('');
 
   useEffect(() => {
     if (value === null || value === undefined) {
-      setRaw('');
+      setRaw(allowInfinity ? '∞' : '');
+    } else if (!isFinite(value)) {
+      setRaw('∞');
     } else {
       setRaw(String(value));
     }
-  }, [value]);
+  }, [value, allowInfinity]);
 
   return (
     <input
@@ -785,13 +787,18 @@ function NumberInput({ value, min, step, placeholder, allowEmpty, onChange }: Nu
       style={inputStyle}
       onChange={e => {
         const r = e.target.value.replace(/,/g, '.');
+        if (allowInfinity && (r === '' || r === '∞' || r === 'inf')) {
+          setRaw('∞');
+          onChange(Infinity);
+          return;
+        }
         if (r === '' || r === '-' || r === '.') {
           setRaw(r);
           onChange(0);
           return;
         }
         const parsed = parseFloat(r);
-        if (isNaN(parsed) || !isFinite(parsed)) {
+        if (isNaN(parsed)) {
           return;
         }
         if (min !== undefined && parsed < min) {
