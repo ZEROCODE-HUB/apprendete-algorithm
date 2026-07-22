@@ -275,6 +275,7 @@ export default function SimuladorPage() {
         dap: form.dap,
         apoyoEstatal: form.apoyoEstatal,
         ivaBajoFrontera: form.ivaBajoFrontera,
+        subsidio: 0,
         fechaInicioPeriodo: form.fechaInicioPeriodo,
         fechaFinPeriodo: form.fechaFinPeriodo,
         consumoActual: form.consumoActual,
@@ -373,10 +374,30 @@ export default function SimuladorPage() {
           <Card title="Periodo actual">
             <Row>
               <Field label="Inicio periodo actual">
-                <Input type="date" value={form.fechaInicioPeriodo} onChange={e => updateForm('fechaInicioPeriodo', e.target.value)} />
+                <Input type="date" value={form.fechaInicioPeriodo} onChange={e => {
+                  const d = e.target.valueAsDate;
+                  if (d) {
+                    const y = d.getFullYear();
+                    const m = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    updateForm('fechaInicioPeriodo', `${y}-${m}-${day}`);
+                  } else {
+                    updateForm('fechaInicioPeriodo', e.target.value);
+                  }
+                }} />
               </Field>
               <Field label="Fin periodo (fecha de lectura)">
-                <Input type="date" value={form.fechaFinPeriodo} onChange={e => updateForm('fechaFinPeriodo', e.target.value)} />
+                <Input type="date" value={form.fechaFinPeriodo} onChange={e => {
+                  const d = e.target.valueAsDate;
+                  if (d) {
+                    const y = d.getFullYear();
+                    const m = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    updateForm('fechaFinPeriodo', `${y}-${m}-${day}`);
+                  } else {
+                    updateForm('fechaFinPeriodo', e.target.value);
+                  }
+                }} />
               </Field>
             </Row>
             <Field label="Consumo actual (kWh)">
@@ -416,10 +437,30 @@ export default function SimuladorPage() {
                 </div>
                 <Row>
                   <Field label="Inicio">
-                    <Input type="date" value={p.fechaInicio} onChange={e => updatePeriodo(i, 'fechaInicio', e.target.value)} />
+                    <Input type="date" value={p.fechaInicio} onChange={e => {
+                      const d = e.target.valueAsDate;
+                      if (d) {
+                        const y = d.getFullYear();
+                        const m = String(d.getMonth() + 1).padStart(2, '0');
+                        const day = String(d.getDate()).padStart(2, '0');
+                        updatePeriodo(i, 'fechaInicio', `${y}-${m}-${day}`);
+                      } else {
+                        updatePeriodo(i, 'fechaInicio', e.target.value);
+                      }
+                    }} />
                   </Field>
                   <Field label="Fin">
-                    <Input type="date" value={p.fechaFin} onChange={e => updatePeriodo(i, 'fechaFin', e.target.value)} />
+                    <Input type="date" value={p.fechaFin} onChange={e => {
+                      const d = e.target.valueAsDate;
+                      if (d) {
+                        const y = d.getFullYear();
+                        const m = String(d.getMonth() + 1).padStart(2, '0');
+                        const day = String(d.getDate()).padStart(2, '0');
+                        updatePeriodo(i, 'fechaFin', `${y}-${m}-${day}`);
+                      } else {
+                        updatePeriodo(i, 'fechaFin', e.target.value);
+                      }
+                    }} />
                   </Field>
                 </Row>
                 <Field label={`Consumo (kWh)`}>
