@@ -376,10 +376,10 @@ export default function SimuladorPage() {
               <Field label="Inicio periodo actual">
                 <Input type="date" value={form.fechaInicioPeriodo} onChange={e => {
                   const d = e.target.valueAsDate;
-                  if (d) {
-                    const y = d.getFullYear();
-                    const m = String(d.getMonth() + 1).padStart(2, '0');
-                    const day = String(d.getDate()).padStart(2, '0');
+                  if (d && !isNaN(d.getTime())) {
+                    const y = d.getUTCFullYear();
+                    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+                    const day = String(d.getUTCDate()).padStart(2, '0');
                     updateForm('fechaInicioPeriodo', `${y}-${m}-${day}`);
                   } else {
                     updateForm('fechaInicioPeriodo', e.target.value);
@@ -389,10 +389,10 @@ export default function SimuladorPage() {
               <Field label="Fin periodo (fecha de lectura)">
                 <Input type="date" value={form.fechaFinPeriodo} onChange={e => {
                   const d = e.target.valueAsDate;
-                  if (d) {
-                    const y = d.getFullYear();
-                    const m = String(d.getMonth() + 1).padStart(2, '0');
-                    const day = String(d.getDate()).padStart(2, '0');
+                  if (d && !isNaN(d.getTime())) {
+                    const y = d.getUTCFullYear();
+                    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+                    const day = String(d.getUTCDate()).padStart(2, '0');
                     updateForm('fechaFinPeriodo', `${y}-${m}-${day}`);
                   } else {
                     updateForm('fechaFinPeriodo', e.target.value);
@@ -439,10 +439,10 @@ export default function SimuladorPage() {
                   <Field label="Inicio">
                     <Input type="date" value={p.fechaInicio} onChange={e => {
                       const d = e.target.valueAsDate;
-                      if (d) {
-                        const y = d.getFullYear();
-                        const m = String(d.getMonth() + 1).padStart(2, '0');
-                        const day = String(d.getDate()).padStart(2, '0');
+                      if (d && !isNaN(d.getTime())) {
+                        const y = d.getUTCFullYear();
+                        const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+                        const day = String(d.getUTCDate()).padStart(2, '0');
                         updatePeriodo(i, 'fechaInicio', `${y}-${m}-${day}`);
                       } else {
                         updatePeriodo(i, 'fechaInicio', e.target.value);
@@ -452,10 +452,10 @@ export default function SimuladorPage() {
                   <Field label="Fin">
                     <Input type="date" value={p.fechaFin} onChange={e => {
                       const d = e.target.valueAsDate;
-                      if (d) {
-                        const y = d.getFullYear();
-                        const m = String(d.getMonth() + 1).padStart(2, '0');
-                        const day = String(d.getDate()).padStart(2, '0');
+                      if (d && !isNaN(d.getTime())) {
+                        const y = d.getUTCFullYear();
+                        const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+                        const day = String(d.getUTCDate()).padStart(2, '0');
                         updatePeriodo(i, 'fechaFin', `${y}-${m}-${day}`);
                       } else {
                         updatePeriodo(i, 'fechaFin', e.target.value);
