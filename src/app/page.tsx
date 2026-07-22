@@ -345,6 +345,7 @@ export default function SimuladorPage() {
         })),
         cuotas,
       };
+      console.log('DEBUG input.cuotas:', JSON.stringify(input.cuotas));
 
       const res = await fetch('/api/calcular', {
         method: 'POST',
