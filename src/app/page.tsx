@@ -32,9 +32,7 @@ function fmtMXN(n: unknown): string {
 function fmtKWh(n: unknown): string {
   const v = safeNumber(n);
   if (!isFinite(v) || v >= 9e15) return '∞';
-  const parts = v.toFixed(2).split('.');
-  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  return parts.join('.');
+  return Math.round(v).toLocaleString('en-US');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -283,7 +281,7 @@ export default function SimuladorPage() {
       idEntradaVerano: 4,
       tipoPeriodo: 'BIMESTRAL',
       region: 'NOROESTE',
-      dap: 82,
+      dap: 41,
       apoyoEstatal: 0,
       ivaBajoFrontera: false,
       fechaInicioPeriodo: '2026-03-23',
