@@ -120,7 +120,8 @@ function calcularCostoEscalones(
       sobrante = 0;
     } else {
       sobrante = restante - kwh;
-      consumoEscalon = sobrante >= 0 ? kwh : restante;
+      consumoEscalon = sobrante >= 0 ? kwh : Math.floor(restante);
+      sobrante = restante - consumoEscalon;
     }
 
     const subtotal = truncar4(consumoEscalon * precio);
@@ -237,32 +238,10 @@ function distribuirConsumoMixto(
   cpdAnterior: number | null,
   esEntradaVerano: boolean
 ): { consumoVerano: number; consumoNoVerano: number } {
-  if (esEntradaVerano) {
-    // Opción A: usar el menor CPD para asignar los días de no verano
-    if (cpdAnterior !== null) {
-      const cpdMenor = Math.min(cpd, cpdAnterior);
-      const consumoNoVerano = truncar4(cpdMenor * diasNoVerano);
-      const consumoVerano = truncar4(consumoTotal - consumoNoVerano);
-      return { consumoVerano, consumoNoVerano };
-    } else {
-      // Sin historial: aplicar directamente CPD actual
-      const consumoNoVerano = truncar4(cpd * diasNoVerano);
-      const consumoVerano = truncar4(consumoTotal - consumoNoVerano);
-      return { consumoVerano, consumoNoVerano };
-    }
-  } else {
-    // Salida de verano: menor CPD para asignar los días de no verano
-    if (cpdAnterior !== null) {
-      const cpdMenor = Math.min(cpd, cpdAnterior);
-      const consumoNoVerano = truncar4(cpdMenor * diasNoVerano);
-      const consumoVerano = truncar4(consumoTotal - consumoNoVerano);
-      return { consumoVerano, consumoNoVerano };
-    } else {
-      const consumoNoVerano = truncar4(cpd * diasNoVerano);
-      const consumoVerano = truncar4(consumoTotal - consumoNoVerano);
-      return { consumoVerano, consumoNoVerano };
-    }
-  }
+  const cpdBase = cpdAnterior !== null ? Math.min(cpd, cpdAnterior) : cpd;
+  const consumoNoVerano = Math.floor(truncar4(cpdBase * diasNoVerano));
+  const consumoVerano = consumoTotal - consumoNoVerano;
+  return { consumoVerano, consumoNoVerano };
 }
 
 // ─── Algoritmo principal ──────────────────────────────────────────────────────
@@ -405,9 +384,10 @@ export function calcularFactura(input: SimuladorInput): ResultadoCalculo {
       consumoActual, diasVerano, diasNoVerano, cpd, cpdAnterior, infoMixto.esEntradaVerano
     );
 
+    const consumoNoVeranoB = Math.floor(truncar4(cpd * diasNoVerano));
     const distB = {
-      consumoVerano: truncar4(cpd * diasVerano),
-      consumoNoVerano: truncar4(cpd * diasNoVerano),
+      consumoNoVerano: consumoNoVeranoB,
+      consumoVerano: consumoActual - consumoNoVeranoB,
     };
 
     const costoVeranoA = calcularCostoEscalones(distA.consumoVerano, cuotas.escalonesVerano).costo;
